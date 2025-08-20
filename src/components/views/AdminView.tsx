@@ -187,6 +187,7 @@ function RelationsManagementTab() {
     if (!selectedEquipment) return;
     setPendingRelations(prev => {
         const newRelations = JSON.parse(JSON.stringify(prev));
+        if (!newRelations.equipmentToSystem) newRelations.equipmentToSystem = {};
         const currentSystems = newRelations.equipmentToSystem[selectedEquipment] || [];
         if (checked) {
             newRelations.equipmentToSystem[selectedEquipment] = [...new Set([...currentSystems, systemId])];
@@ -201,6 +202,7 @@ function RelationsManagementTab() {
     if (!selectedSystem) return;
     setPendingRelations(prev => {
         const newRelations = JSON.parse(JSON.stringify(prev));
+        if (!newRelations.systemToFaults) newRelations.systemToFaults = {};
         const currentFaults = newRelations.systemToFaults[selectedSystem] || [];
         if (checked) {
             newRelations.systemToFaults[selectedSystem] = [...new Set([...currentFaults, faultId])];
