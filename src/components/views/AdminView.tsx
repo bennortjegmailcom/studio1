@@ -172,6 +172,7 @@ function RelationsManagementTab() {
     if (!selectedArea) return;
     setPendingRelations(prev => {
         const newRelations = JSON.parse(JSON.stringify(prev));
+        if (!newRelations.areaToEquipment) newRelations.areaToEquipment = {};
         const currentEquipment = newRelations.areaToEquipment[selectedArea] || [];
         if (checked) {
             newRelations.areaToEquipment[selectedArea] = [...new Set([...currentEquipment, equipmentId])];
@@ -230,7 +231,7 @@ function RelationsManagementTab() {
                     {data.equipment && data.equipment.map(eq => (
                         <div key={eq.id} className="flex items-center space-x-2">
                             <Checkbox id={`area-eq-${eq.id}`}
-                                checked={pendingRelations.areaToEquipment[selectedArea]?.includes(eq.id) ?? false}
+                                checked={pendingRelations.areaToEquipment?.[selectedArea]?.includes(eq.id) ?? false}
                                 onCheckedChange={(checked) => handleAreaEquipmentChange(eq.id, !!checked)}
                             />
                             <label htmlFor={`area-eq-${eq.id}`}>{eq.name}</label>
@@ -254,7 +255,7 @@ function RelationsManagementTab() {
                     {data.systems && data.systems.map(sys => (
                         <div key={sys.id} className="flex items-center space-x-2">
                             <Checkbox id={`eq-sys-${sys.id}`}
-                                checked={pendingRelations.equipmentToSystem[selectedEquipment]?.includes(sys.id) ?? false}
+                                checked={pendingRelations.equipmentToSystem?.[selectedEquipment]?.includes(sys.id) ?? false}
                                 onCheckedChange={(checked) => handleEquipmentSystemChange(sys.id, !!checked)}
                             />
                             <label htmlFor={`eq-sys-${sys.id}`}>{sys.name}</label>
@@ -277,7 +278,7 @@ function RelationsManagementTab() {
                     {data.faults && data.faults.map(fault => (
                         <div key={fault.id} className="flex items-center space-x-2">
                             <Checkbox id={`sys-fault-${fault.id}`}
-                                checked={pendingRelations.systemToFaults[selectedSystem]?.includes(fault.id) ?? false}
+                                checked={pendingRelations.systemToFaults?.[selectedSystem]?.includes(fault.id) ?? false}
                                 onCheckedChange={(checked) => handleSystemFaultChange(fault.id, !!checked)}
                             />
                             <label htmlFor={`sys-fault-${fault.id}`}>{fault.name}</label>
