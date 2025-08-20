@@ -12,6 +12,7 @@ export interface Fault {
 export interface System {
   id: string;
   name: string;
+  sectionId: string;
 }
 
 export interface Equipment {
@@ -20,8 +21,14 @@ export interface Equipment {
   historianTags: string[];
 }
 
+export interface Area {
+    id: string;
+    name: string;
+}
+
 export interface Booking {
   id: string;
+  areaId: string;
   equipmentId: string;
   startTime: number; // minutes from midnight
   endTime: number; // minutes from midnight
@@ -33,11 +40,13 @@ export interface Booking {
 }
 
 export interface Relations {
+  areaToEquipment: Record<string, string[]>; // areaId -> equipmentId[]
   equipmentToSystem: Record<string, string[]>; // equipmentId -> systemId[]
-  systemToDetails: Record<string, { sections: string[]; faults: string[] }>; // systemId -> { sections: sectionId[], faults: faultId[] }
+  systemToFaults: Record<string, string[]>; // systemId -> faultId[]
 }
 
 export interface AppData {
+  areas: Area[];
   equipment: Equipment[];
   systems: System[];
   faults: Fault[];

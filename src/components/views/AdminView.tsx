@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { AppData, Equipment, System, Fault, Section, Relations } from '@/lib/types';
+import type { AppData, Equipment, System, Fault, Section, Relations, Area } from '@/lib/types';
 import { PlusCircle, Trash2, Download, Upload, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
@@ -30,7 +30,7 @@ function DataManagementTab() {
   const handleAddItem = <T extends { id: string, name: string }>(type: keyof AppData, newItem: Omit<T, 'id'>) => {
     setData(prev => {
         const items = prev[type] as T[];
-        const fullItem = { ...newItem, id: `${type}-${Date.now()}` } as T;
+        const fullItem = { ...newItem, id: `${type.toString().slice(0, 4)}-${Date.now()}` } as T;
         return {...prev, [type]: [...items, fullItem]}
     });
   };
@@ -43,7 +43,21 @@ function DataManagementTab() {
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Areas */}
+      <Card>
+        <CardHeader><CardTitle>Areas</CardTitle></CardHeader>
+        <CardContent className="space-y-2">{data.areas.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('areas', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
+        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Area</Button></DialogTrigger>
+            <DialogContent><DialogHeader><DialogTitle>Add New Area</DialogTitle></DialogHeader>
+            <form onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name') as string; if(name) handleAddItem<Area>('areas', { name }); e.currentTarget.reset(); (document.getElementById('close-dialog-area') as HTMLElement).click(); }}>
+            <div className="grid gap-4 py-4"><Label htmlFor="name-area">Name</Label><Input id="name-area" name="name" required /></div>
+            <DialogFooter><DialogClose asChild><Button id="close-dialog-area" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
+            </form></DialogContent>
+        </Dialog>
+        </CardContent>
+      </Card>
+
       {/* Equipment */}
       <Card>
         <CardHeader>
@@ -58,7 +72,7 @@ function DataManagementTab() {
           ))}
             <Dialog>
                 <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4" /> Add Equipment</Button>
+                    <Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4" /> Add Equipment</Button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Add New Equipment</DialogTitle></DialogHeader>
@@ -87,24 +101,31 @@ function DataManagementTab() {
         </CardContent>
       </Card>
       
-      {/* Systems, Faults, Sections follow similar pattern... */}
+      {/* Systems */}
       <Card>
         <CardHeader><CardTitle>Systems</CardTitle></CardHeader>
         <CardContent className="space-y-2">{data.systems.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('systems', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4"/> Add System</Button></DialogTrigger>
+        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add System</Button></DialogTrigger>
             <DialogContent><DialogHeader><DialogTitle>Add New System</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name') as string; if(name) handleAddItem<System>('systems', { name }); e.currentTarget.reset(); (document.getElementById('close-dialog-sys') as HTMLElement).click(); }}>
-            <div className="grid gap-4 py-4"><Label htmlFor="name-sys">Name</Label><Input id="name-sys" name="name" required /></div>
+            <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = fd.get('name') as string; const sectionId = fd.get('sectionId') as string; if(name && sectionId) handleAddItem<System>('systems', { name, sectionId }); e.currentTarget.reset(); (document.getElementById('close-dialog-sys') as HTMLElement).click(); }}>
+            <div className="grid gap-4 py-4">
+                <Label htmlFor="name-sys">Name</Label><Input id="name-sys" name="name" required />
+                <Label htmlFor="section-sys">Section</Label>
+                <Select name="sectionId" required><SelectTrigger><SelectValue placeholder="Select a section" /></SelectTrigger>
+                    <SelectContent>{data.sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
             <DialogFooter><DialogClose asChild><Button id="close-dialog-sys" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
             </form></DialogContent>
         </Dialog>
         </CardContent>
       </Card>
 
+      {/* Faults */}
       <Card>
         <CardHeader><CardTitle>Faults</CardTitle></CardHeader>
         <CardContent className="space-y-2">{data.faults.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('faults', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4"/> Add Fault</Button></DialogTrigger>
+        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Fault</Button></DialogTrigger>
             <DialogContent><DialogHeader><DialogTitle>Add New Fault</DialogTitle></DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name') as string; if(name) handleAddItem<Fault>('faults', { name }); e.currentTarget.reset(); (document.getElementById('close-dialog-fault') as HTMLElement).click(); }}>
             <div className="grid gap-4 py-4"><Label htmlFor="name-fault">Name</Label><Input id="name-fault" name="name" required /></div>
@@ -114,10 +135,11 @@ function DataManagementTab() {
         </CardContent>
       </Card>
 
+      {/* Sections */}
       <Card>
         <CardHeader><CardTitle>Sections</CardTitle></CardHeader>
         <CardContent className="space-y-2">{data.sections.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: item.color}}></div>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('sections', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4"/> Add Section</Button></DialogTrigger>
+        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Section</Button></DialogTrigger>
             <DialogContent><DialogHeader><DialogTitle>Add New Section</DialogTitle></DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = fd.get('name') as string; const color = fd.get('color') as string; if(name && color) handleAddItem<Section>('sections', { name, color }); e.currentTarget.reset(); (document.getElementById('close-dialog-sec') as HTMLElement).click(); }}>
             <div className="grid gap-4 py-4"><Label htmlFor="name-sec">Name</Label><Input id="name-sec" name="name" required /><Label htmlFor="color-sec">Color</Label><Input id="color-sec" name="color" type="color" defaultValue="#3F51B5" /></div>
@@ -136,19 +158,34 @@ function RelationsManagementTab() {
   if (!context) return null;
 
   const { data, setData } = context;
+  const [selectedArea, setSelectedArea] = React.useState<string | null>(null);
   const [selectedEquipment, setSelectedEquipment] = React.useState<string | null>(null);
   const [selectedSystem, setSelectedSystem] = React.useState<string | null>(null);
+
   const [pendingRelations, setPendingRelations] = React.useState<Relations>(data.relations);
 
   useEffect(() => {
-    // Keep pending relations in sync if global data changes from another source (like import)
     setPendingRelations(data.relations);
   }, [data.relations]);
+
+  const handleAreaEquipmentChange = (equipmentId: string, checked: boolean) => {
+    if (!selectedArea) return;
+    setPendingRelations(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev));
+        const currentEquipment = newRelations.areaToEquipment[selectedArea] || [];
+        if (checked) {
+            newRelations.areaToEquipment[selectedArea] = [...new Set([...currentEquipment, equipmentId])];
+        } else {
+            newRelations.areaToEquipment[selectedArea] = currentEquipment.filter((id: string) => id !== equipmentId);
+        }
+        return newRelations;
+    });
+  }
 
   const handleEquipmentSystemChange = (systemId: string, checked: boolean) => {
     if (!selectedEquipment) return;
     setPendingRelations(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev)); // Deep copy
+        const newRelations = JSON.parse(JSON.stringify(prev));
         const currentSystems = newRelations.equipmentToSystem[selectedEquipment] || [];
         if (checked) {
             newRelations.equipmentToSystem[selectedEquipment] = [...new Set([...currentSystems, systemId])];
@@ -159,17 +196,16 @@ function RelationsManagementTab() {
     });
   }
   
-  const handleSystemDetailChange = (type: 'sections' | 'faults', detailId: string, checked: boolean) => {
+  const handleSystemFaultChange = (faultId: string, checked: boolean) => {
     if (!selectedSystem) return;
     setPendingRelations(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev)); // Deep copy
-        const currentDetails = newRelations.systemToDetails[selectedSystem] || { sections: [], faults: [] };
+        const newRelations = JSON.parse(JSON.stringify(prev));
+        const currentFaults = newRelations.systemToFaults[selectedSystem] || [];
         if (checked) {
-            currentDetails[type] = [...new Set([...currentDetails[type], detailId])];
+            newRelations.systemToFaults[selectedSystem] = [...new Set([...currentFaults, faultId])];
         } else {
-            currentDetails[type] = currentDetails[type].filter((id: string) => id !== detailId);
+            newRelations.systemToFaults[selectedSystem] = currentFaults.filter((id: string) => id !== faultId);
         }
-        newRelations.systemToDetails[selectedSystem] = currentDetails;
         return newRelations;
     });
   }
@@ -181,6 +217,30 @@ function RelationsManagementTab() {
 
   return (
     <div className="space-y-6">
+       <Card>
+        <CardHeader><CardTitle>Area ➞ Equipment</CardTitle><CardDescription>Select an area to manage its equipment.</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+            <Select onValueChange={setSelectedArea}>
+                <SelectTrigger><SelectValue placeholder="Select Area..." /></SelectTrigger>
+                <SelectContent>{data.areas.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+            </Select>
+            {selectedArea && <div className="space-y-2 pt-4">
+                <h4 className="font-medium">Associated Equipment</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {data.equipment.map(eq => (
+                        <div key={eq.id} className="flex items-center space-x-2">
+                            <Checkbox id={`area-eq-${eq.id}`}
+                                checked={pendingRelations.areaToEquipment[selectedArea]?.includes(eq.id) ?? false}
+                                onCheckedChange={(checked) => handleAreaEquipmentChange(eq.id, !!checked)}
+                            />
+                            <label htmlFor={`area-eq-${eq.id}`}>{eq.name}</label>
+                        </div>
+                    ))}
+                </div>
+            </div>}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader><CardTitle>Equipment ➞ Systems</CardTitle><CardDescription>Select equipment to manage its associated systems.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
@@ -190,45 +250,35 @@ function RelationsManagementTab() {
             </Select>
             {selectedEquipment && <div className="space-y-2 pt-4">
                 <h4 className="font-medium">Associated Systems</h4>
-                {data.systems.map(sys => (
-                    <div key={sys.id} className="flex items-center space-x-2">
-                        <Checkbox id={`eq-sys-${sys.id}`}
-                            checked={pendingRelations.equipmentToSystem[selectedEquipment]?.includes(sys.id) ?? false}
-                            onCheckedChange={(checked) => handleEquipmentSystemChange(sys.id, !!checked)}
-                        />
-                        <label htmlFor={`eq-sys-${sys.id}`}>{sys.name}</label>
-                    </div>
-                ))}
+                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {data.systems.map(sys => (
+                        <div key={sys.id} className="flex items-center space-x-2">
+                            <Checkbox id={`eq-sys-${sys.id}`}
+                                checked={pendingRelations.equipmentToSystem[selectedEquipment]?.includes(sys.id) ?? false}
+                                onCheckedChange={(checked) => handleEquipmentSystemChange(sys.id, !!checked)}
+                            />
+                            <label htmlFor={`eq-sys-${sys.id}`}>{sys.name}</label>
+                        </div>
+                    ))}
+                </div>
             </div>}
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Systems ➞ Details</CardTitle><CardDescription>Select a system to manage its faults and sections.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>System ➞ Faults</CardTitle><CardDescription>Select a system to manage its possible faults.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
             <Select onValueChange={setSelectedSystem}>
                 <SelectTrigger><SelectValue placeholder="Select System..." /></SelectTrigger>
                 <SelectContent>{data.systems.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
-            {selectedSystem && <div className="grid grid-cols-2 gap-4 pt-4">
-                <div>
-                    <h4 className="font-medium">Associated Sections</h4>
-                    {data.sections.map(sec => (
-                        <div key={sec.id} className="flex items-center space-x-2">
-                            <Checkbox id={`sys-sec-${sec.id}`}
-                                checked={pendingRelations.systemToDetails[selectedSystem]?.sections.includes(sec.id) ?? false}
-                                onCheckedChange={(checked) => handleSystemDetailChange('sections', sec.id, !!checked)}
-                            />
-                            <label htmlFor={`sys-sec-${sec.id}`}>{sec.name}</label>
-                        </div>
-                    ))}
-                </div>
-                <div>
-                    <h4 className="font-medium">Associated Faults</h4>
+            {selectedSystem && <div className="space-y-2 pt-4">
+                <h4 className="font-medium">Associated Faults</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {data.faults.map(fault => (
                         <div key={fault.id} className="flex items-center space-x-2">
                             <Checkbox id={`sys-fault-${fault.id}`}
-                                checked={pendingRelations.systemToDetails[selectedSystem]?.faults.includes(fault.id) ?? false}
-                                onCheckedChange={(checked) => handleSystemDetailChange('faults', fault.id, !!checked)}
+                                checked={pendingRelations.systemToFaults[selectedSystem]?.includes(fault.id) ?? false}
+                                onCheckedChange={(checked) => handleSystemFaultChange(fault.id, !!checked)}
                             />
                             <label htmlFor={`sys-fault-${fault.id}`}>{fault.name}</label>
                         </div>

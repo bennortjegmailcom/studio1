@@ -32,11 +32,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from './ui/input';
 
 
 const bookingSchema = z.object({
+  areaId: z.string().min(1, 'Area is required.'),
+  equipmentId: z.string().min(1, 'Equipment is required.'),
   systemId: z.string().min(1, 'System is required.'),
-  sectionId: z.string().min(1, 'Section is required.'),
   faultId: z.string().min(1, 'Fault is required.'),
   comments: z.string().optional(),
 });
@@ -59,68 +61,96 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
+      areaId: '',
+      equipmentId: '',
       systemId: '',
-      sectionId: '',
       faultId: '',
       comments: '',
     },
   });
 
   const { watch, reset, setValue } = form;
+  const selectedAreaId = watch('areaId');
+  const selectedEquipmentId = watch('equipmentId');
   const selectedSystemId = watch('systemId');
 
   useEffect(() => {
     if (booking) {
       reset({
+        areaId: booking.areaId,
+        equipmentId: booking.equipmentId,
         systemId: booking.systemId,
-        sectionId: booking.sectionId,
         faultId: booking.faultId,
         comments: booking.comments,
       });
     } else {
-      reset({ systemId: '', sectionId: '', faultId: '', comments: '' });
+        // Find area for the selected equipment
+        const equipmentAreaId = Object.keys(data.relations.areaToEquipment).find(areaId => 
+            data.relations.areaToEquipment[areaId].includes(selection?.equipmentId || '')
+        );
+      reset({ 
+          areaId: equipmentAreaId || '', 
+          equipmentId: selection?.equipmentId || '',
+          systemId: '', 
+          faultId: '', 
+          comments: '' 
+        });
     }
-  }, [booking, isOpen, reset]);
+  }, [booking, selection, isOpen, reset, data.relations.areaToEquipment]);
+  
+  const availableEquipment = useMemo(() => {
+    if (!selectedAreaId) return [];
+    const equipmentIds = data.relations.areaToEquipment[selectedAreaId] || [];
+    return data.equipment.filter(e => equipmentIds.includes(e.id));
+  }, [selectedAreaId, data.relations, data.equipment]);
 
-  const equipment = useMemo(() => 
-    selection ? data.equipment.find(e => e.id === selection.equipmentId) : null,
-    [selection, data.equipment]
-  );
-  
   const availableSystems = useMemo(() => {
-    if (!equipment) return [];
-    const systemIds = data.relations.equipmentToSystem[equipment.id] || [];
+    if (!selectedEquipmentId) return [];
+    const systemIds = data.relations.equipmentToSystem[selectedEquipmentId] || [];
     return data.systems.filter(s => systemIds.includes(s.id));
-  }, [equipment, data.relations, data.systems]);
+  }, [selectedEquipmentId, data.relations, data.systems]);
   
-  const availableSections = useMemo(() => {
-    if (!selectedSystemId) return [];
-    const sectionIds = data.relations.systemToDetails[selectedSystemId]?.sections || [];
-    return data.sections.filter(s => sectionIds.includes(s.id));
-  }, [selectedSystemId, data.relations, data.sections]);
+  const selectedSystem = useMemo(() => {
+      return data.systems.find(s => s.id === selectedSystemId) || null;
+  }, [selectedSystemId, data.systems]);
+
+  const responsibleSection = useMemo(() => {
+    if (!selectedSystem) return null;
+    return data.sections.find(s => s.id === selectedSystem.sectionId) || null;
+  }, [selectedSystem, data.sections]);
   
   const availableFaults = useMemo(() => {
     if (!selectedSystemId) return [];
-    const faultIds = data.relations.systemToDetails[selectedSystemId]?.faults || [];
+    const faultIds = data.relations.systemToFaults[selectedSystemId] || [];
     return data.faults.filter(f => faultIds.includes(f.id));
   }, [selectedSystemId, data.relations, data.faults]);
 
 
-  // Effect to reset section/fault if system changes and they are no longer valid
+  // Effect to reset downstream fields when upstream changes
   useEffect(() => {
-    if (!availableSections.some(s => s.id === watch('sectionId'))) {
-        setValue('sectionId', '');
-    }
-     if (!availableFaults.some(f => f.id === watch('faultId'))) {
-        setValue('faultId', '');
-    }
-  }, [selectedSystemId, availableSections, availableFaults, watch, setValue]);
+    setValue('equipmentId', '');
+    setValue('systemId', '');
+    setValue('faultId', '');
+  }, [selectedAreaId, setValue]);
+  
+  useEffect(() => {
+    setValue('systemId', '');
+    setValue('faultId', '');
+  }, [selectedEquipmentId, setValue]);
+
+  useEffect(() => {
+    setValue('faultId', '');
+  }, [selectedSystemId, setValue]);
+
 
   const onSubmit = (formData: BookingFormData) => {
+    if (!responsibleSection) return;
+    const submissionData = { ...formData, sectionId: responsibleSection.id };
+    
     if (booking) {
-      updateBooking({ ...booking, ...formData });
+      updateBooking({ ...booking, ...submissionData });
     } else if (selection) {
-      addBooking({ ...formData, equipmentId: selection.equipmentId }, selection);
+      addBooking(submissionData, selection);
     }
     onClose();
   };
@@ -131,6 +161,9 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
     return `${h}:${m}`;
   };
 
+  const initialEquipment = useMemo(() => data.equipment.find(e => e.id === selection?.equipmentId), [data.equipment, selection]);
+
+
   if (!selection) return null;
 
   return (
@@ -139,30 +172,38 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
         <DialogHeader>
           <DialogTitle>{booking ? 'Edit' : 'Create'} Booking</DialogTitle>
           <DialogDescription>
-            For {equipment?.name} from {formatTime(selection.startTime)} to {formatTime(selection.endTime)}.
+            For {initialEquipment?.name} from {formatTime(selection.startTime)} to {formatTime(selection.endTime)}.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             <FormField
               control={form.control}
-              name="systemId"
+              name="areaId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>System</FormLabel>
+                  <FormLabel>Area</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a system" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select an area" /></SelectTrigger>
                     </FormControl>
-                    <SelectContent>
-                      {availableSystems.map(system => (
-                        <SelectItem key={system.id} value={system.id}>
-                          {system.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{data.areas.map(area => <SelectItem key={area.id} value={area.id}>{area.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="equipmentId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Equipment</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedAreaId}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select equipment" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>{availableEquipment.map(eq => <SelectItem key={eq.id} value={eq.id}>{eq.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
@@ -170,28 +211,33 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
             />
             <FormField
               control={form.control}
-              name="sectionId"
+              name="systemId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Section</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSystemId}>
+                  <FormLabel>System</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedEquipmentId}>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a section" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select a system" /></SelectTrigger>
                     </FormControl>
-                    <SelectContent>
-                      {availableSections.map(section => (
-                        <SelectItem key={section.id} value={section.id}>
-                          {section.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{availableSystems.map(system => <SelectItem key={system.id} value={system.id}>{system.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
+             <FormItem>
+                <FormLabel>Responsibility (Section)</FormLabel>
+                <div className="flex items-center gap-2 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    {responsibleSection ? (
+                        <>
+                            <div className="w-4 h-4 rounded-full" style={{backgroundColor: responsibleSection.color}}></div>
+                            {responsibleSection.name}
+                        </>
+                    ) : (
+                        <span className="text-muted-foreground">Select a system to see section</span>
+                    )}
+                </div>
+             </FormItem>
              <FormField
               control={form.control}
               name="faultId"
@@ -200,17 +246,9 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
                   <FormLabel>Fault</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSystemId}>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a fault" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select a fault" /></SelectTrigger>
                     </FormControl>
-                    <SelectContent>
-                      {availableFaults.map(fault => (
-                        <SelectItem key={fault.id} value={fault.id}>
-                          {fault.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{availableFaults.map(fault => <SelectItem key={fault.id} value={fault.id}>{fault.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
