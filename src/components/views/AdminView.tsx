@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { AppData, Equipment, System, Fault, Section } from '@/lib/types';
-import { PlusCircle, Trash2, Download, Upload } from 'lucide-react';
+import type { AppData, Equipment, System, Fault, Section, Relations } from '@/lib/types';
+import { PlusCircle, Trash2, Download, Upload, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
   Select,
@@ -132,42 +132,55 @@ function DataManagementTab() {
 
 function RelationsManagementTab() {
   const context = useContext(AppContext);
+  const { toast } = useToast();
   if (!context) return null;
+
   const { data, setData } = context;
   const [selectedEquipment, setSelectedEquipment] = React.useState<string | null>(null);
   const [selectedSystem, setSelectedSystem] = React.useState<string | null>(null);
+  const [pendingRelations, setPendingRelations] = React.useState<Relations>(data.relations);
+
+  useEffect(() => {
+    // Keep pending relations in sync if global data changes from another source (like import)
+    setPendingRelations(data.relations);
+  }, [data.relations]);
 
   const handleEquipmentSystemChange = (systemId: string, checked: boolean) => {
-    if(!selectedEquipment) return;
-    setData(prev => {
-        const relations = {...prev.relations};
-        const currentSystems = relations.equipmentToSystem[selectedEquipment] || [];
-        if(checked) {
-            relations.equipmentToSystem[selectedEquipment] = [...currentSystems, systemId];
+    if (!selectedEquipment) return;
+    setPendingRelations(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev)); // Deep copy
+        const currentSystems = newRelations.equipmentToSystem[selectedEquipment] || [];
+        if (checked) {
+            newRelations.equipmentToSystem[selectedEquipment] = [...new Set([...currentSystems, systemId])];
         } else {
-            relations.equipmentToSystem[selectedEquipment] = currentSystems.filter(id => id !== systemId);
+            newRelations.equipmentToSystem[selectedEquipment] = currentSystems.filter((id: string) => id !== systemId);
         }
-        return {...prev, relations};
+        return newRelations;
     });
   }
   
   const handleSystemDetailChange = (type: 'sections' | 'faults', detailId: string, checked: boolean) => {
-    if(!selectedSystem) return;
-    setData(prev => {
-        const relations = {...prev.relations};
-        const currentDetails = relations.systemToDetails[selectedSystem] || {sections: [], faults: []};
-        if(checked) {
-            currentDetails[type] = [...currentDetails[type], detailId];
+    if (!selectedSystem) return;
+    setPendingRelations(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev)); // Deep copy
+        const currentDetails = newRelations.systemToDetails[selectedSystem] || { sections: [], faults: [] };
+        if (checked) {
+            currentDetails[type] = [...new Set([...currentDetails[type], detailId])];
         } else {
-            currentDetails[type] = currentDetails[type].filter(id => id !== detailId);
+            currentDetails[type] = currentDetails[type].filter((id: string) => id !== detailId);
         }
-        relations.systemToDetails[selectedSystem] = currentDetails;
-        return {...prev, relations};
+        newRelations.systemToDetails[selectedSystem] = currentDetails;
+        return newRelations;
     });
   }
 
+  const handleSaveRelations = () => {
+    setData(prev => ({...prev, relations: pendingRelations}));
+    toast({ title: "Success", description: "Relations saved successfully." });
+  }
+
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-6">
       <Card>
         <CardHeader><CardTitle>Equipment ➞ Systems</CardTitle><CardDescription>Select equipment to manage its associated systems.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
@@ -180,7 +193,7 @@ function RelationsManagementTab() {
                 {data.systems.map(sys => (
                     <div key={sys.id} className="flex items-center space-x-2">
                         <Checkbox id={`eq-sys-${sys.id}`}
-                            checked={data.relations.equipmentToSystem[selectedEquipment]?.includes(sys.id)}
+                            checked={pendingRelations.equipmentToSystem[selectedEquipment]?.includes(sys.id) ?? false}
                             onCheckedChange={(checked) => handleEquipmentSystemChange(sys.id, !!checked)}
                         />
                         <label htmlFor={`eq-sys-${sys.id}`}>{sys.name}</label>
@@ -202,7 +215,7 @@ function RelationsManagementTab() {
                     {data.sections.map(sec => (
                         <div key={sec.id} className="flex items-center space-x-2">
                             <Checkbox id={`sys-sec-${sec.id}`}
-                                checked={data.relations.systemToDetails[selectedSystem]?.sections.includes(sec.id)}
+                                checked={pendingRelations.systemToDetails[selectedSystem]?.sections.includes(sec.id) ?? false}
                                 onCheckedChange={(checked) => handleSystemDetailChange('sections', sec.id, !!checked)}
                             />
                             <label htmlFor={`sys-sec-${sec.id}`}>{sec.name}</label>
@@ -214,7 +227,7 @@ function RelationsManagementTab() {
                     {data.faults.map(fault => (
                         <div key={fault.id} className="flex items-center space-x-2">
                             <Checkbox id={`sys-fault-${fault.id}`}
-                                checked={data.relations.systemToDetails[selectedSystem]?.faults.includes(fault.id)}
+                                checked={pendingRelations.systemToDetails[selectedSystem]?.faults.includes(fault.id) ?? false}
                                 onCheckedChange={(checked) => handleSystemDetailChange('faults', fault.id, !!checked)}
                             />
                             <label htmlFor={`sys-fault-${fault.id}`}>{fault.name}</label>
@@ -224,6 +237,11 @@ function RelationsManagementTab() {
             </div>}
         </CardContent>
       </Card>
+      <div className="flex justify-end">
+        <Button onClick={handleSaveRelations}>
+            <Save className="mr-2 h-4 w-4" /> Save All Relations
+        </Button>
+      </div>
     </div>
   );
 }
