@@ -85,9 +85,9 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
       });
     } else {
         // Find area for the selected equipment
-        const equipmentAreaId = Object.keys(data.relations.areaToEquipment).find(areaId => 
+        const equipmentAreaId = data.relations.areaToEquipment ? Object.keys(data.relations.areaToEquipment).find(areaId => 
             data.relations.areaToEquipment[areaId].includes(selection?.equipmentId || '')
-        );
+        ) : undefined;
       reset({ 
           areaId: equipmentAreaId || '', 
           equipmentId: selection?.equipmentId || '',
@@ -99,13 +99,13 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
   }, [booking, selection, isOpen, reset, data.relations.areaToEquipment]);
   
   const availableEquipment = useMemo(() => {
-    if (!selectedAreaId) return [];
+    if (!selectedAreaId || !data.relations.areaToEquipment) return [];
     const equipmentIds = data.relations.areaToEquipment[selectedAreaId] || [];
     return data.equipment.filter(e => equipmentIds.includes(e.id));
   }, [selectedAreaId, data.relations, data.equipment]);
 
   const availableSystems = useMemo(() => {
-    if (!selectedEquipmentId) return [];
+    if (!selectedEquipmentId || !data.relations.equipmentToSystem) return [];
     const systemIds = data.relations.equipmentToSystem[selectedEquipmentId] || [];
     return data.systems.filter(s => systemIds.includes(s.id));
   }, [selectedEquipmentId, data.relations, data.systems]);
@@ -120,7 +120,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
   }, [selectedSystem, data.sections]);
   
   const availableFaults = useMemo(() => {
-    if (!selectedSystemId) return [];
+    if (!selectedSystemId || !data.relations.systemToFaults) return [];
     const faultIds = data.relations.systemToFaults[selectedSystemId] || [];
     return data.faults.filter(f => faultIds.includes(f.id));
   }, [selectedSystemId, data.relations, data.faults]);
