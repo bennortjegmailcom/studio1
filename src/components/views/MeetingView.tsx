@@ -31,13 +31,13 @@ export default function MeetingView() {
         textContent += `--- ${eq.name} ---\n`;
         equipmentBookings.forEach(b => {
           const system = data.systems.find(s => s.id === b.systemId)?.name || 'N/A';
-          const section = data.sections.find(s => s.id === b.sectionId)?.name || 'N/A';
+          const responsibility = data.responsibilities.find(r => r.id === b.responsibilityId)?.name || 'N/A';
           const fault = data.faults.find(f => f.id === b.faultId)?.name || 'N/A';
           const duration = b.endTime - b.startTime;
           
           textContent += `Time: ${formatTime(b.startTime)} - ${formatTime(b.endTime)} (${duration} mins)\n`;
           textContent += `System: ${system}\n`;
-          textContent += `Section: ${section}\n`;
+          textContent += `Responsibility: ${responsibility}\n`;
           textContent += `Fault: ${fault}\n`;
           textContent += `Comments: ${b.comments}\n\n`;
         });
@@ -72,7 +72,7 @@ export default function MeetingView() {
                     .map(booking => {
                         const left = (booking.startTime / (24 * 60)) * 100;
                         const width = ((booking.endTime - booking.startTime) / (24 * 60)) * 100;
-                        const section = data.sections.find(s => s.id === booking.sectionId);
+                        const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
                         
                         return (
                         <div
@@ -81,7 +81,7 @@ export default function MeetingView() {
                             style={{
                             left: `${left}%`,
                             width: `${width}%`,
-                            backgroundColor: section?.color || 'gray',
+                            backgroundColor: responsibility?.color || 'gray',
                             }}
                             title={`${formatTime(booking.startTime)} - ${formatTime(booking.endTime)}`}
                         ></div>

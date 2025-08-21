@@ -187,7 +187,7 @@ export default function TrackerView() {
 
                  const left = (booking.startTime / TOTAL_MINUTES) * 100;
                  const width = ((booking.endTime - booking.startTime) / TOTAL_MINUTES) * 100;
-                 const section = data.sections.find(s => s.id === booking.sectionId);
+                 const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
                  const system = data.systems.find(s => s.id === booking.systemId);
                  const fault = data.faults.find(s => s.id === booking.faultId);
 
@@ -199,7 +199,7 @@ export default function TrackerView() {
                        top: `${rowIndex * 50 + 4}px`,
                        left: `${left}%`,
                        width: `${width}%`,
-                       backgroundColor: section?.color || 'gray',
+                       backgroundColor: responsibility?.color || 'gray',
                        minWidth: '100px',
                      }}
                    >

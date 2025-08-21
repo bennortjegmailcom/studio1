@@ -1,4 +1,4 @@
-export interface Section {
+export interface Responsibility {
   id: string;
   name: string;
   color: string;
@@ -12,7 +12,6 @@ export interface Fault {
 export interface System {
   id: string;
   name: string;
-  sectionId: string;
 }
 
 export interface Equipment {
@@ -33,7 +32,7 @@ export interface Booking {
   startTime: number; // minutes from midnight
   endTime: number; // minutes from midnight
   systemId: string;
-  sectionId: string;
+  responsibilityId: string;
   faultId: string;
   comments: string;
   date: string; // "YYYY-MM-DD"
@@ -42,7 +41,7 @@ export interface Booking {
 export interface Relations {
   areaToEquipment: Record<string, string[]>; // areaId -> equipmentId[]
   equipmentToSystem: Record<string, string[]>; // equipmentId -> systemId[]
-  systemToFaults: Record<string, string[]>; // systemId -> faultId[]
+  systemToResponsibilityToFaults: Record<string, Record<string, string[]>>; // systemId -> responsibilityId -> faultId[]
 }
 
 export interface AppData {
@@ -50,7 +49,7 @@ export interface AppData {
   equipment: Equipment[];
   systems: System[];
   faults: Fault[];
-  sections: Section[];
+  responsibilities: Responsibility[];
   bookings: Booking[];
   relations: Relations;
 }

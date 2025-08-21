@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { AppData, Equipment, System, Fault, Section, Relations, Area } from '@/lib/types';
+import type { AppData, Equipment, System, Fault, Responsibility, Relations, Area } from '@/lib/types';
 import { PlusCircle, Trash2, Download, Upload, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 function DataManagementTab() {
@@ -41,116 +42,88 @@ function DataManagementTab() {
         return {...prev, [type]: items.filter(item => item.id !== id)}
     });
   };
+  
+  const dataCategories = [
+    { key: 'areas' as const, title: 'Areas', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
+    { key: 'equipment' as const, title: 'Equipment', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'tags', label: 'Historian Tags (comma-separated)', type: 'text' }] },
+    { key: 'systems' as const, title: 'Systems', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
+    { key: 'responsibilities' as const, title: 'Responsibilities', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'color', label: 'Color', type: 'color' }] },
+    { key: 'faults' as const, title: 'Faults', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
+  ];
+
+  const renderItem = (item: any, catKey: keyof AppData) => {
+    if (catKey === 'responsibilities') {
+      const resp = item as Responsibility;
+      return <span className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: resp.color}}></div>{resp.name}</span>
+    }
+    return <span>{item.name}</span>;
+  }
+  
+  const getTypedItem = (formData: FormData, catKey: keyof AppData) => {
+    const name = formData.get('name') as string;
+    if (!name) return null;
+
+    switch(catKey) {
+        case 'areas': return { name } as Omit<Area, 'id'>;
+        case 'equipment': 
+            const tags = formData.get('tags') as string;
+            return { name, historianTags: tags ? tags.split(',').map(t => t.trim()) : [] } as Omit<Equipment, 'id'>;
+        case 'systems': return { name } as Omit<System, 'id'>;
+        case 'responsibilities':
+            const color = formData.get('color') as string;
+            return { name, color: color || '#cccccc' } as Omit<Responsibility, 'id'>;
+        case 'faults': return { name } as Omit<Fault, 'id'>;
+        default: return null;
+    }
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      {/* Areas */}
-      <Card>
-        <CardHeader><CardTitle>Areas</CardTitle></CardHeader>
-        <CardContent className="space-y-2">{data.areas && data.areas.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('areas', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Area</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Add New Area</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name') as string; if(name) handleAddItem<Area>('areas', { name }); e.currentTarget.reset(); (document.getElementById('close-dialog-area') as HTMLElement).click(); }}>
-            <div className="grid gap-4 py-4"><Label htmlFor="name-area">Name</Label><Input id="name-area" name="name" required /></div>
-            <DialogFooter><DialogClose asChild><Button id="close-dialog-area" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
-            </form></DialogContent>
-        </Dialog>
-        </CardContent>
-      </Card>
-
-      {/* Equipment */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Equipment</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {data.equipment && data.equipment.map(item => (
-            <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md">
-              <span>{item.name}</span>
-              <Button variant="ghost" size="icon" onClick={() => handleDeleteItem('equipment', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-            </div>
-          ))}
+      {dataCategories.map(cat => (
+        <Card key={cat.key}>
+          <CardHeader><CardTitle>{cat.title}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <ScrollArea className="h-64">
+              {(data[cat.key] as any[] || []).map(item => (
+                <div key={item.id} className="flex items-center justify-between p-2 mb-2 bg-secondary rounded-md">
+                  {renderItem(item, cat.key)}
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(cat.key, item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              ))}
+            </ScrollArea>
             <Dialog>
-                <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4" /> Add Equipment</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Add New Equipment</DialogTitle></DialogHeader>
-                    <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const formData = new FormData(e.currentTarget);
-                        const name = formData.get('name') as string;
-                        const tags = formData.get('tags') as string;
-                        if(name) handleAddItem<Equipment>('equipment', { name, historianTags: tags.split(',').map(t => t.trim()) });
-                        e.currentTarget.reset();
-                        document.getElementById('close-dialog-equip')?.click();
-                    }}>
-                        <div className="grid gap-4 py-4">
-                            <Label htmlFor="name">Name</Label>
-                            <Input id="name" name="name" required />
-                            <Label htmlFor="tags">Historian Tags (comma-separated)</Label>
-                            <Input id="tags" name="tags" />
-                        </div>
-                        <DialogFooter>
-                            <DialogClose asChild><Button type="button" variant="secondary" id="close-dialog-equip">Cancel</Button></DialogClose>
-                            <Button type="submit">Save</Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
+              <DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add {cat.title.slice(0, -1)}</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Add New {cat.title.slice(0, -1)}</DialogTitle></DialogHeader>
+                <form onSubmit={(e) => { 
+                    e.preventDefault(); 
+                    const itemData = getTypedItem(new FormData(e.currentTarget), cat.key);
+                    if (itemData) handleAddItem(cat.key, itemData as any);
+                    e.currentTarget.reset();
+                    (document.getElementById(`close-dialog-${cat.key}`) as HTMLElement).click(); 
+                }}>
+                  <div className="grid gap-4 py-4">
+                    {cat.fields.map(field => (
+                      <React.Fragment key={field.name}>
+                        <Label htmlFor={`${field.name}-${cat.key}`}>{field.label}</Label>
+                        <Input id={`${field.name}-${cat.key}`} name={field.name} type={field.type} required={field.name === 'name'} defaultValue={field.type === 'color' ? '#3F51B5' : ''}/>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild><Button id={`close-dialog-${cat.key}`} type="button" variant="secondary">Cancel</Button></DialogClose>
+                    <Button type="submit">Save</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
             </Dialog>
-        </CardContent>
-      </Card>
-      
-      {/* Systems */}
-      <Card>
-        <CardHeader><CardTitle>Systems</CardTitle></CardHeader>
-        <CardContent className="space-y-2">{data.systems && data.systems.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('systems', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add System</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Add New System</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = fd.get('name') as string; const sectionId = fd.get('sectionId') as string; if(name && sectionId) handleAddItem<System>('systems', { name, sectionId }); e.currentTarget.reset(); (document.getElementById('close-dialog-sys') as HTMLElement).click(); }}>
-            <div className="grid gap-4 py-4">
-                <Label htmlFor="name-sys">Name</Label><Input id="name-sys" name="name" required />
-                <Label htmlFor="section-sys">Section</Label>
-                <Select name="sectionId" required><SelectTrigger><SelectValue placeholder="Select a section" /></SelectTrigger>
-                    <SelectContent>{data.sections && data.sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                </Select>
-            </div>
-            <DialogFooter><DialogClose asChild><Button id="close-dialog-sys" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
-            </form></DialogContent>
-        </Dialog>
-        </CardContent>
-      </Card>
-
-      {/* Faults */}
-      <Card>
-        <CardHeader><CardTitle>Faults</CardTitle></CardHeader>
-        <CardContent className="space-y-2">{data.faults && data.faults.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('faults', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Fault</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Add New Fault</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name') as string; if(name) handleAddItem<Fault>('faults', { name }); e.currentTarget.reset(); (document.getElementById('close-dialog-fault') as HTMLElement).click(); }}>
-            <div className="grid gap-4 py-4"><Label htmlFor="name-fault">Name</Label><Input id="name-fault" name="name" required /></div>
-            <DialogFooter><DialogClose asChild><Button id="close-dialog-fault" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
-            </form></DialogContent>
-        </Dialog>
-        </CardContent>
-      </Card>
-
-      {/* Sections */}
-      <Card>
-        <CardHeader><CardTitle>Sections</CardTitle></CardHeader>
-        <CardContent className="space-y-2">{data.sections && data.sections.map(item => <div key={item.id} className="flex items-center justify-between p-2 bg-secondary rounded-md"><span className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: item.color}}></div>{item.name}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteItem('sections', item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}
-        <Dialog><DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add Section</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Add New Section</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = fd.get('name') as string; const color = fd.get('color') as string; if(name && color) handleAddItem<Section>('sections', { name, color }); e.currentTarget.reset(); (document.getElementById('close-dialog-sec') as HTMLElement).click(); }}>
-            <div className="grid gap-4 py-4"><Label htmlFor="name-sec">Name</Label><Input id="name-sec" name="name" required /><Label htmlFor="color-sec">Color</Label><Input id="color-sec" name="color" type="color" defaultValue="#3F51B5" /></div>
-            <DialogFooter><DialogClose asChild><Button id="close-dialog-sec" type="button" variant="secondary">Cancel</Button></DialogClose><Button type="submit">Save</Button></DialogFooter>
-            </form></DialogContent>
-        </Dialog>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
+
 
 function RelationsManagementTab() {
   const context = useContext(AppContext);
@@ -158,146 +131,246 @@ function RelationsManagementTab() {
   if (!context) return null;
 
   const { data, setData } = context;
-  const [selectedArea, setSelectedArea] = React.useState<string | null>(null);
-  const [selectedEquipment, setSelectedEquipment] = React.useState<string | null>(null);
-  const [selectedSystem, setSelectedSystem] = React.useState<string | null>(null);
+  const [relationType, setRelationType] = useState('areaToEquipment');
+  
+  // State for Area -> Equipment
+  const [selectedArea, setSelectedArea] = useState<string>('');
+  const [selectedEquipmentForArea, setSelectedEquipmentForArea] = useState<string[]>([]);
 
-  const [pendingRelations, setPendingRelations] = React.useState<Relations>(data.relations);
+  // State for Equipment -> Systems
+  const [selectedEquipmentForSystem, setSelectedEquipmentForSystem] = useState<string[]>([]);
+  const [selectedSystems, setSelectedSystems] = useState<string[]>([]);
+
+  // State for System -> Responsibility -> Fault
+  const [selectedSystemForFaults, setSelectedSystemForFaults] = useState<string>('');
+  const [selectedResponsibility, setSelectedResponsibility] = useState<string>('');
+  const [selectedFaults, setSelectedFaults] = useState<string[]>([]);
+
 
   useEffect(() => {
-    setPendingRelations(data.relations);
-  }, [data.relations]);
+    if (relationType === 'areaToEquipment' && selectedArea) {
+      setSelectedEquipmentForArea(data.relations.areaToEquipment?.[selectedArea] || []);
+    }
+  }, [selectedArea, data.relations.areaToEquipment, relationType]);
 
-  const handleAreaEquipmentChange = (equipmentId: string, checked: boolean) => {
-    if (!selectedArea) return;
-    setPendingRelations(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev));
-        if (!newRelations.areaToEquipment) newRelations.areaToEquipment = {};
-        const currentEquipment = newRelations.areaToEquipment[selectedArea] || [];
-        if (checked) {
-            newRelations.areaToEquipment[selectedArea] = [...new Set([...currentEquipment, equipmentId])];
-        } else {
-            newRelations.areaToEquipment[selectedArea] = currentEquipment.filter((id: string) => id !== equipmentId);
-        }
-        return newRelations;
-    });
-  }
+  useEffect(() => {
+     if (relationType === 'equipmentToSystem' && selectedEquipmentForSystem.length > 0) {
+        const allSystems = selectedEquipmentForSystem.flatMap(eqId => data.relations.equipmentToSystem?.[eqId] || []);
+        setSelectedSystems(Array.from(new Set(allSystems)));
+     } else {
+        setSelectedSystems([]);
+     }
+  }, [selectedEquipmentForSystem, data.relations.equipmentToSystem, relationType]);
 
-  const handleEquipmentSystemChange = (systemId: string, checked: boolean) => {
-    if (!selectedEquipment) return;
-    setPendingRelations(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev));
-        if (!newRelations.equipmentToSystem) newRelations.equipmentToSystem = {};
-        const currentSystems = newRelations.equipmentToSystem[selectedEquipment] || [];
-        if (checked) {
-            newRelations.equipmentToSystem[selectedEquipment] = [...new Set([...currentSystems, systemId])];
-        } else {
-            newRelations.equipmentToSystem[selectedEquipment] = currentSystems.filter((id: string) => id !== systemId);
-        }
-        return newRelations;
-    });
-  }
+  useEffect(() => {
+    if (relationType === 'systemToResponsibility' && selectedSystemForFaults && selectedResponsibility) {
+      setSelectedFaults(data.relations.systemToResponsibilityToFaults?.[selectedSystemForFaults]?.[selectedResponsibility] || []);
+    } else {
+        setSelectedFaults([]);
+    }
+  }, [selectedSystemForFaults, selectedResponsibility, data.relations.systemToResponsibilityToFaults, relationType]);
   
-  const handleSystemFaultChange = (faultId: string, checked: boolean) => {
-    if (!selectedSystem) return;
-    setPendingRelations(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev));
-        if (!newRelations.systemToFaults) newRelations.systemToFaults = {};
-        const currentFaults = newRelations.systemToFaults[selectedSystem] || [];
-        if (checked) {
-            newRelations.systemToFaults[selectedSystem] = [...new Set([...currentFaults, faultId])];
-        } else {
-            newRelations.systemToFaults[selectedSystem] = currentFaults.filter((id: string) => id !== faultId);
-        }
-        return newRelations;
+  // Reset selections when relation type changes
+  useEffect(() => {
+    setSelectedArea('');
+    setSelectedEquipmentForArea([]);
+    setSelectedEquipmentForSystem([]);
+    setSelectedSystems([]);
+    setSelectedSystemForFaults('');
+    setSelectedResponsibility('');
+    setSelectedFaults([]);
+  }, [relationType]);
+
+
+  const handleSaveAreaToEquipment = () => {
+    if (!selectedArea) return;
+    setData(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev.relations));
+        newRelations.areaToEquipment[selectedArea] = selectedEquipmentForArea;
+        return {...prev, relations: newRelations };
     });
+    toast({ title: "Success", description: "Area to Equipment relation saved." });
   }
 
-  const handleSaveRelations = () => {
-    setData(prev => ({...prev, relations: pendingRelations}));
-    toast({ title: "Success", description: "Relations saved successfully." });
+  const handleSaveEquipmentToSystems = () => {
+    if (selectedEquipmentForSystem.length === 0) return;
+    setData(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev.relations));
+        selectedEquipmentForSystem.forEach(eqId => {
+            newRelations.equipmentToSystem[eqId] = selectedSystems;
+        });
+        return {...prev, relations: newRelations};
+    });
+     toast({ title: "Success", description: "Equipment to Systems relation saved." });
+  }
+
+  const handleSaveSystemResponsibilityFaults = () => {
+    if (!selectedSystemForFaults || !selectedResponsibility) return;
+    setData(prev => {
+        const newRelations = JSON.parse(JSON.stringify(prev.relations));
+        if (!newRelations.systemToResponsibilityToFaults) {
+            newRelations.systemToResponsibilityToFaults = {};
+        }
+        if (!newRelations.systemToResponsibilityToFaults[selectedSystemForFaults]) {
+            newRelations.systemToResponsibilityToFaults[selectedSystemForFaults] = {};
+        }
+        newRelations.systemToResponsibilityToFaults[selectedSystemForFaults][selectedResponsibility] = selectedFaults;
+        return {...prev, relations: newRelations};
+    });
+    toast({ title: "Success", description: "System, Responsibility and Faults relation saved." });
+  }
+
+  const handleMultiSelect = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string, checked: boolean) => {
+    setter(prev => {
+        if (checked) {
+            return [...prev, value];
+        } else {
+            return prev.filter(v => v !== value);
+        }
+    })
   }
 
   return (
-    <div className="space-y-6">
-       <Card>
-        <CardHeader><CardTitle>Area ➞ Equipment</CardTitle><CardDescription>Select an area to manage its equipment.</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
-            <Select onValueChange={setSelectedArea}>
-                <SelectTrigger><SelectValue placeholder="Select Area..." /></SelectTrigger>
-                <SelectContent>{data.areas && data.areas.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
-            </Select>
-            {selectedArea && <div className="space-y-2 pt-4">
-                <h4 className="font-medium">Associated Equipment</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {data.equipment && data.equipment.map(eq => (
-                        <div key={eq.id} className="flex items-center space-x-2">
-                            <Checkbox id={`area-eq-${eq.id}`}
-                                checked={pendingRelations.areaToEquipment?.[selectedArea]?.includes(eq.id) ?? false}
-                                onCheckedChange={(checked) => handleAreaEquipmentChange(eq.id, !!checked)}
-                            />
-                            <label htmlFor={`area-eq-${eq.id}`}>{eq.name}</label>
-                        </div>
-                    ))}
-                </div>
-            </div>}
-        </CardContent>
-      </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle>Relations Builder</CardTitle>
+        <CardDescription>Define the relationships between your data entities.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Label>Relation Type</Label>
+        <Select value={relationType} onValueChange={setRelationType}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="areaToEquipment">Area ➞ Equipment</SelectItem>
+            <SelectItem value="equipmentToSystem">Equipment ➞ Systems</SelectItem>
+            <SelectItem value="systemToResponsibility">System ➞ Responsibility ➞ Fault Types</SelectItem>
+          </SelectContent>
+        </Select>
 
-      <Card>
-        <CardHeader><CardTitle>Equipment ➞ Systems</CardTitle><CardDescription>Select equipment to manage its associated systems.</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
-            <Select onValueChange={setSelectedEquipment}>
-                <SelectTrigger><SelectValue placeholder="Select Equipment..." /></SelectTrigger>
-                <SelectContent>{data.equipment && data.equipment.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
+        {relationType === 'areaToEquipment' && (
+          <div className="space-y-4 pt-4 border-t">
+            <h3 className="font-semibold">Step 1: Link Equipment to an Area</h3>
+            <Label>Select an Area</Label>
+            <Select value={selectedArea} onValueChange={setSelectedArea}>
+              <SelectTrigger><SelectValue placeholder="Choose an area..." /></SelectTrigger>
+              <SelectContent>
+                {data.areas.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
             </Select>
-            {selectedEquipment && <div className="space-y-2 pt-4">
-                <h4 className="font-medium">Associated Systems</h4>
-                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {data.systems && data.systems.map(sys => (
-                        <div key={sys.id} className="flex items-center space-x-2">
-                            <Checkbox id={`eq-sys-${sys.id}`}
-                                checked={pendingRelations.equipmentToSystem?.[selectedEquipment]?.includes(sys.id) ?? false}
-                                onCheckedChange={(checked) => handleEquipmentSystemChange(sys.id, !!checked)}
-                            />
-                            <label htmlFor={`eq-sys-${sys.id}`}>{sys.name}</label>
-                        </div>
+            {selectedArea && (
+              <div className="space-y-2">
+                <Label>Select Equipment</Label>
+                <ScrollArea className="h-48 p-4 border rounded-md">
+                  <div className="grid grid-cols-2 gap-2">
+                    {data.equipment.map(eq => (
+                      <div key={eq.id} className="flex items-center space-x-2">
+                        <Checkbox id={`area-eq-${eq.id}`}
+                          checked={selectedEquipmentForArea.includes(eq.id)}
+                          onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForArea, eq.id, !!checked)}
+                        />
+                        <label htmlFor={`area-eq-${eq.id}`} className="text-sm">{eq.name}</label>
+                      </div>
                     ))}
+                  </div>
+                </ScrollArea>
+                 <Button onClick={handleSaveAreaToEquipment}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {relationType === 'equipmentToSystem' && (
+          <div className="space-y-4 pt-4 border-t">
+            <h3 className="font-semibold">Step 2: Link Systems to Equipment</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                 <Label>Select Equipment (one or more)</Label>
+                  <ScrollArea className="h-48 p-4 border rounded-md">
+                    <div className="space-y-2">
+                        {data.equipment.map(eq => (
+                            <div key={eq.id} className="flex items-center space-x-2">
+                                <Checkbox id={`eq-sys-eq-${eq.id}`}
+                                checked={selectedEquipmentForSystem.includes(eq.id)}
+                                onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForSystem, eq.id, !!checked)}
+                                />
+                                <label htmlFor={`eq-sys-eq-${eq.id}`} className="text-sm">{eq.name}</label>
+                            </div>
+                        ))}
+                    </div>
+                 </ScrollArea>
+              </div>
+               <div className="space-y-2">
+                 <Label>Select Systems (one or more)</Label>
+                  <ScrollArea className="h-48 p-4 border rounded-md">
+                     <div className="space-y-2">
+                        {data.systems.map(sys => (
+                            <div key={sys.id} className="flex items-center space-x-2">
+                                <Checkbox id={`eq-sys-sys-${sys.id}`}
+                                checked={selectedSystems.includes(sys.id)}
+                                onCheckedChange={(checked) => handleMultiSelect(setSelectedSystems, sys.id, !!checked)}
+                                />
+                                <label htmlFor={`eq-sys-sys-${sys.id}`} className="text-sm">{sys.name}</label>
+                            </div>
+                        ))}
+                    </div>
+                 </ScrollArea>
+              </div>
+            </div>
+            <Button onClick={handleSaveEquipmentToSystems}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+          </div>
+        )}
+
+        {relationType === 'systemToResponsibility' && (
+           <div className="space-y-4 pt-4 border-t">
+             <h3 className="font-semibold">Step 3: Link Faults to System and Responsibility</h3>
+             <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>Select a System</Label>
+                    <Select value={selectedSystemForFaults} onValueChange={setSelectedSystemForFaults}>
+                        <SelectTrigger><SelectValue placeholder="Choose a system..." /></SelectTrigger>
+                        <SelectContent>
+                            {data.systems.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </div>
-            </div>}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><CardTitle>System ➞ Faults</CardTitle><CardDescription>Select a system to manage its possible faults.</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
-            <Select onValueChange={setSelectedSystem}>
-                <SelectTrigger><SelectValue placeholder="Select System..." /></SelectTrigger>
-                <SelectContent>{data.systems && data.systems.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-            </Select>
-            {selectedSystem && <div className="space-y-2 pt-4">
-                <h4 className="font-medium">Associated Faults</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {data.faults && data.faults.map(fault => (
-                        <div key={fault.id} className="flex items-center space-x-2">
-                            <Checkbox id={`sys-fault-${fault.id}`}
-                                checked={pendingRelations.systemToFaults?.[selectedSystem]?.includes(fault.id) ?? false}
-                                onCheckedChange={(checked) => handleSystemFaultChange(fault.id, !!checked)}
+                 <div className="space-y-2">
+                    <Label>Select a Responsibility</Label>
+                     <Select value={selectedResponsibility} onValueChange={setSelectedResponsibility}>
+                        <SelectTrigger><SelectValue placeholder="Choose a responsibility..." /></SelectTrigger>
+                        <SelectContent>
+                            {data.responsibilities.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+             </div>
+             {selectedSystemForFaults && selectedResponsibility && (
+                <div className="space-y-2">
+                    <Label>Select Faults</Label>
+                    <ScrollArea className="h-48 p-4 border rounded-md">
+                        <div className="grid grid-cols-2 gap-2">
+                        {data.faults.map(f => (
+                            <div key={f.id} className="flex items-center space-x-2">
+                            <Checkbox id={`fault-${f.id}`}
+                                checked={selectedFaults.includes(f.id)}
+                                onCheckedChange={(checked) => handleMultiSelect(setSelectedFaults, f.id, !!checked)}
                             />
-                            <label htmlFor={`sys-fault-${fault.id}`}>{fault.name}</label>
+                            <label htmlFor={`fault-${f.id}`} className="text-sm">{f.name}</label>
+                            </div>
+                        ))}
                         </div>
-                    ))}
+                    </ScrollArea>
+                    <Button onClick={handleSaveSystemResponsibilityFaults}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
                 </div>
-            </div>}
-        </CardContent>
-      </Card>
-      <div className="flex justify-end">
-        <Button onClick={handleSaveRelations}>
-            <Save className="mr-2 h-4 w-4" /> Save All Relations
-        </Button>
-      </div>
-    </div>
+             )}
+           </div>
+        )}
+
+      </CardContent>
+    </Card>
   );
 }
+
+
 
 function ImportExportTab() {
   const context = useContext(AppContext);
@@ -306,7 +379,7 @@ function ImportExportTab() {
   const { data, setData } = context;
 
   const handleExport = () => {
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data))}`;
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
     const link = document.createElement("a");
     link.href = jsonString;
     link.download = "equiptrack-ai-data.json";
@@ -336,6 +409,7 @@ function ImportExportTab() {
         }
     }
     reader.readAsText(file);
+    event.target.value = ''; // Reset file input
   }
 
   return (
@@ -361,8 +435,8 @@ export default function AdminView() {
   return (
     <Tabs defaultValue="data" className="space-y-4">
       <TabsList>
-        <TabsTrigger value="data">Data Management</TabsTrigger>
-        <TabsTrigger value="relations">Relations Manager</TabsTrigger>
+        <TabsTrigger value="data">Data Manager</TabsTrigger>
+        <TabsTrigger value="relations">Relations Builder</TabsTrigger>
         <TabsTrigger value="import-export">Import/Export</TabsTrigger>
       </TabsList>
       <TabsContent value="data">

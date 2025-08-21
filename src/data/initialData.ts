@@ -14,12 +14,12 @@ export const initialData: AppData = {
     { id: 'equip-5', name: 'Conveyor Belt B', historianTags: ['CBB_speed', 'CBB_motor_current'] },
   ],
   systems: [
-    { id: 'sys-1', name: 'Drive Motor', sectionId: 'sec-2' },
-    { id: 'sys-2', name: 'Packaging Head', sectionId: 'sec-1' },
-    { id: 'sys-3', name: 'Main Controller', sectionId: 'sec-3' },
-    { id: 'sys-4', name: 'Chassis/Frame', sectionId: 'sec-1' },
-    { id: 'sys-5', name: 'Conveyor Belt', sectionId: 'sec-1' },
-    { id: 'sys-6', name: 'Safety Sensor', sectionId: 'sec-2' },
+    { id: 'sys-1', name: 'Drive Motor' },
+    { id: 'sys-2', name: 'Packaging Head' },
+    { id: 'sys-3', name: 'Main Controller' },
+    { id: 'sys-4', name: 'Chassis/Frame' },
+    { id: 'sys-5', name: 'Conveyor Belt' },
+    { id: 'sys-6', name: 'Safety Sensor' },
   ],
   faults: [
     { id: 'fault-1', name: 'Trip' },
@@ -29,11 +29,11 @@ export const initialData: AppData = {
     { id: 'fault-5', name: 'E-Stop' },
     { id: 'fault-6', name: 'Communication Error' },
   ],
-  sections: [
-    { id: 'sec-1', name: 'Mechanical', color: '#3b82f6' }, // blue
-    { id: 'sec-2', name: 'Electrical', color: '#f59e0b' }, // amber
-    { id: 'sec-3', name: 'Software', color: '#10b981' }, // emerald
-    { id: 'sec-4', name: 'Operations', color: '#6366f1' }, // indigo
+  responsibilities: [
+    { id: 'resp-1', name: 'Mechanical', color: '#3b82f6' }, // blue
+    { id: 'resp-2', name: 'Electrical', color: '#f59e0b' }, // amber
+    { id: 'resp-3', name: 'Software', color: '#10b981' }, // emerald
+    { id: 'resp-4', name: 'Operations', color: '#6366f1' }, // indigo
   ],
   bookings: [
     {
@@ -44,7 +44,7 @@ export const initialData: AppData = {
       startTime: 60, // 01:00
       endTime: 120, // 02:00
       systemId: 'sys-1',
-      sectionId: 'sec-2',
+      responsibilityId: 'resp-2',
       faultId: 'fault-3',
       comments: 'Motor tripped due to overload.',
     },
@@ -56,7 +56,7 @@ export const initialData: AppData = {
       startTime: 240, // 04:00
       endTime: 285, // 04:45
       systemId: 'sys-2',
-      sectionId: 'sec-1',
+      responsibilityId: 'resp-1',
       faultId: 'fault-2',
       comments: 'Box jam in the main chute.',
     },
@@ -74,13 +74,25 @@ export const initialData: AppData = {
       'equip-4': ['sys-1', 'sys-3', 'sys-6'],
       'equip-5': ['sys-1', 'sys-5'],
     },
-    systemToFaults: {
-      'sys-1': ['fault-1', 'fault-3'], // Drive Motor (Electrical)
-      'sys-2': ['fault-2', 'fault-4'], // Packaging Head (Mechanical)
-      'sys-3': ['fault-6'],             // Main Controller (Software)
-      'sys-4': ['fault-4'],             // Chassis (Mechanical)
-      'sys-5': ['fault-2', 'fault-4'], // Conveyor Belt (Mechanical)
-      'sys-6': ['fault-5', 'fault-1'], // Safety Sensor (Electrical)
+    systemToResponsibilityToFaults: {
+      'sys-1': { // Drive Motor
+        'resp-2': ['fault-1', 'fault-3'] // Electrical -> Trip, Overload
+      },
+      'sys-2': { // Packaging Head
+        'resp-1': ['fault-2', 'fault-4'] // Mechanical -> Jam, Alignment Issue
+      },
+      'sys-3': { // Main Controller
+        'resp-3': ['fault-6'] // Software -> Communication Error
+      },
+       'sys-4': { // Chassis/Frame
+        'resp-1': ['fault-4'] // Mechanical -> Alignment Issue
+      },
+       'sys-5': { // Conveyor Belt
+        'resp-1': ['fault-2', 'fault-4'] // Mechanical -> Jam, Alignment Issue
+      },
+       'sys-6': { // Safety Sensor
+        'resp-2': ['fault-5', 'fault-1'] // Electrical -> E-Stop, Trip
+      },
     },
   },
 };

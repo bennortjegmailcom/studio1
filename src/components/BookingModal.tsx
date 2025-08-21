@@ -11,7 +11,6 @@ import {
   DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -32,13 +31,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from './ui/input';
 
 
 const bookingSchema = z.object({
   areaId: z.string().min(1, 'Area is required.'),
   equipmentId: z.string().min(1, 'Equipment is required.'),
   systemId: z.string().min(1, 'System is required.'),
+  responsibilityId: z.string().min(1, 'Responsibility is required.'),
   faultId: z.string().min(1, 'Fault is required.'),
   comments: z.string().optional(),
 });
@@ -64,6 +63,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
       areaId: '',
       equipmentId: '',
       systemId: '',
+      responsibilityId: '',
       faultId: '',
       comments: '',
     },
@@ -73,6 +73,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
   const selectedAreaId = watch('areaId');
   const selectedEquipmentId = watch('equipmentId');
   const selectedSystemId = watch('systemId');
+  const selectedResponsibilityId = watch('responsibilityId');
 
   useEffect(() => {
     if (booking) {
@@ -80,18 +81,19 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
         areaId: booking.areaId,
         equipmentId: booking.equipmentId,
         systemId: booking.systemId,
+        responsibilityId: booking.responsibilityId,
         faultId: booking.faultId,
         comments: booking.comments,
       });
-    } else {
-        // Find area for the selected equipment
+    } else if (selection) {
         const equipmentAreaId = data.relations.areaToEquipment ? Object.keys(data.relations.areaToEquipment).find(areaId => 
-            data.relations.areaToEquipment[areaId].includes(selection?.equipmentId || '')
+            data.relations.areaToEquipment[areaId]?.includes(selection.equipmentId)
         ) : undefined;
       reset({ 
           areaId: equipmentAreaId || '', 
-          equipmentId: selection?.equipmentId || '',
-          systemId: '', 
+          equipmentId: selection.equipmentId,
+          systemId: '',
+          responsibilityId: '', 
           faultId: '', 
           comments: '' 
         });
@@ -102,50 +104,52 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
     if (!selectedAreaId || !data.relations.areaToEquipment) return [];
     const equipmentIds = data.relations.areaToEquipment[selectedAreaId] || [];
     return data.equipment.filter(e => equipmentIds.includes(e.id));
-  }, [selectedAreaId, data.relations, data.equipment]);
+  }, [selectedAreaId, data.relations.areaToEquipment, data.equipment]);
 
   const availableSystems = useMemo(() => {
     if (!selectedEquipmentId || !data.relations.equipmentToSystem) return [];
     const systemIds = data.relations.equipmentToSystem[selectedEquipmentId] || [];
     return data.systems.filter(s => systemIds.includes(s.id));
-  }, [selectedEquipmentId, data.relations, data.systems]);
-  
-  const selectedSystem = useMemo(() => {
-      return data.systems.find(s => s.id === selectedSystemId) || null;
-  }, [selectedSystemId, data.systems]);
+  }, [selectedEquipmentId, data.relations.equipmentToSystem, data.systems]);
 
-  const responsibleSection = useMemo(() => {
-    if (!selectedSystem) return null;
-    return data.sections.find(s => s.id === selectedSystem.sectionId) || null;
-  }, [selectedSystem, data.sections]);
+  const availableResponsibilities = useMemo(() => {
+    if (!selectedSystemId || !data.relations.systemToResponsibilityToFaults) return [];
+    const responsibilityIds = Object.keys(data.relations.systemToResponsibilityToFaults[selectedSystemId] || {});
+    return data.responsibilities.filter(r => responsibilityIds.includes(r.id));
+  }, [selectedSystemId, data.relations.systemToResponsibilityToFaults, data.responsibilities]);
   
   const availableFaults = useMemo(() => {
-    if (!selectedSystemId || !data.relations.systemToFaults) return [];
-    const faultIds = data.relations.systemToFaults[selectedSystemId] || [];
+    if (!selectedSystemId || !selectedResponsibilityId || !data.relations.systemToResponsibilityToFaults) return [];
+    const faultIds = data.relations.systemToResponsibilityToFaults[selectedSystemId]?.[selectedResponsibilityId] || [];
     return data.faults.filter(f => faultIds.includes(f.id));
-  }, [selectedSystemId, data.relations, data.faults]);
+  }, [selectedSystemId, selectedResponsibilityId, data.relations.systemToResponsibilityToFaults, data.faults]);
 
 
   // Effect to reset downstream fields when upstream changes
   useEffect(() => {
     setValue('equipmentId', '');
     setValue('systemId', '');
+    setValue('responsibilityId', '');
     setValue('faultId', '');
   }, [selectedAreaId, setValue]);
   
   useEffect(() => {
     setValue('systemId', '');
+    setValue('responsibilityId', '');
     setValue('faultId', '');
   }, [selectedEquipmentId, setValue]);
 
   useEffect(() => {
+    setValue('responsibilityId', '');
     setValue('faultId', '');
   }, [selectedSystemId, setValue]);
 
+  useEffect(() => {
+    setValue('faultId', '');
+  }, [selectedResponsibilityId, setValue]);
 
   const onSubmit = (formData: BookingFormData) => {
-    if (!responsibleSection) return;
-    const submissionData = { ...formData, sectionId: responsibleSection.id };
+    const submissionData = { ...formData };
     
     if (booking) {
       updateBooking({ ...booking, ...submissionData });
@@ -225,26 +229,29 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
                 </FormItem>
               )}
             />
-             <FormItem>
-                <FormLabel>Responsibility (Section)</FormLabel>
-                <div className="flex items-center gap-2 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {responsibleSection ? (
-                        <>
-                            <div className="w-4 h-4 rounded-full" style={{backgroundColor: responsibleSection.color}}></div>
-                            {responsibleSection.name}
-                        </>
-                    ) : (
-                        <span className="text-muted-foreground">Select a system to see section</span>
-                    )}
-                </div>
-             </FormItem>
+            <FormField
+              control={form.control}
+              name="responsibilityId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Responsibility</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSystemId}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select responsibility" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>{availableResponsibilities.map(resp => <SelectItem key={resp.id} value={resp.id}>{resp.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
              <FormField
               control={form.control}
               name="faultId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fault</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSystemId}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedResponsibilityId}>
                     <FormControl>
                       <SelectTrigger><SelectValue placeholder="Select a fault" /></SelectTrigger>
                     </FormControl>
