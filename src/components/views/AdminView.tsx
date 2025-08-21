@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useContext, useState, useEffect, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { AppData, Equipment, System, Fault, Responsibility, Relations, Area } from '@/lib/types';
-import { PlusCircle, Trash2, Download, Upload, Save } from 'lucide-react';
+import { PlusCircle, Trash2, Download, Upload, Save, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
   Select,
@@ -20,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 function DataManagementTab() {
@@ -122,6 +125,91 @@ function DataManagementTab() {
       ))}
     </div>
   );
+}
+
+function RelationsViewer() {
+    const context = useContext(AppContext);
+    if (!context) return null;
+    const { data } = context;
+  
+    const getName = (collection: any[], id: string) => collection.find(item => item.id === id)?.name || 'Unknown';
+  
+    return (
+        <Collapsible>
+            <CollapsibleTrigger asChild>
+                <Button variant="outline" className="mb-4">
+                    <Eye className="mr-2 h-4 w-4" /> View Current Relations
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+                <Card>
+                    <CardHeader><CardTitle>Current Relations</CardTitle></CardHeader>
+                    <CardContent>
+                        <Accordion type="multiple" className="w-full">
+                            <AccordionItem value="area-eq">
+                                <AccordionTrigger>Area ➞ Equipment</AccordionTrigger>
+                                <AccordionContent>
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        {data.areas.map(area => (
+                                            <li key={area.id}>
+                                                <strong>{area.name}</strong>
+                                                <ul className="list-circle pl-5 mt-1">
+                                                    {(data.relations.areaToEquipment?.[area.id] || []).map(eqId => (
+                                                        <li key={eqId}>{getName(data.equipment, eqId)}</li>
+                                                    ))}
+                                                </ul>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </AccordionContent>
+                            </AccordionItem>
+                            <AccordionItem value="eq-sys">
+                                <AccordionTrigger>Equipment ➞ Systems</AccordionTrigger>
+                                <AccordionContent>
+                                     <ul className="list-disc pl-5 space-y-2">
+                                        {data.equipment.map(eq => (
+                                            <li key={eq.id}>
+                                                <strong>{eq.name}</strong>
+                                                <ul className="list-circle pl-5 mt-1">
+                                                    {(data.relations.equipmentToSystem?.[eq.id] || []).map(sysId => (
+                                                        <li key={sysId}>{getName(data.systems, sysId)}</li>
+                                                    ))}
+                                                </ul>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </AccordionContent>
+                            </AccordionItem>
+                            <AccordionItem value="sys-resp-fault">
+                                <AccordionTrigger>System ➞ Responsibility ➞ Faults</AccordionTrigger>
+                                <AccordionContent>
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        {data.systems.map(sys => (
+                                            <li key={sys.id}>
+                                                <strong>{sys.name}</strong>
+                                                <ul className="list-circle pl-5 mt-1 space-y-1">
+                                                     {Object.entries(data.relations.systemToResponsibilityToFaults?.[sys.id] || {}).map(([respId, faultIds]) => (
+                                                        <li key={respId}>
+                                                            <em>{getName(data.responsibilities, respId)}</em>
+                                                            <ul className="list-square pl-5 mt-1">
+                                                                {faultIds.map(faultId => (
+                                                                    <li key={faultId}>{getName(data.faults, faultId)}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                    </CardContent>
+                </Card>
+            </CollapsibleContent>
+        </Collapsible>
+    );
 }
 
 
@@ -231,142 +319,145 @@ function RelationsManagementTab() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Relations Builder</CardTitle>
-        <CardDescription>Define the relationships between your data entities.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Label>Relation Type</Label>
-        <Select value={relationType} onValueChange={setRelationType}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="areaToEquipment">Area ➞ Equipment</SelectItem>
-            <SelectItem value="equipmentToSystem">Equipment ➞ Systems</SelectItem>
-            <SelectItem value="systemToResponsibility">System ➞ Responsibility ➞ Fault Types</SelectItem>
-          </SelectContent>
-        </Select>
+    <div>
+      <RelationsViewer />
+      <Card>
+        <CardHeader>
+          <CardTitle>Relations Builder</CardTitle>
+          <CardDescription>Define the relationships between your data entities.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Label>Relation Type</Label>
+          <Select value={relationType} onValueChange={setRelationType}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="areaToEquipment">Area ➞ Equipment</SelectItem>
+              <SelectItem value="equipmentToSystem">Equipment ➞ Systems</SelectItem>
+              <SelectItem value="systemToResponsibility">System ➞ Responsibility ➞ Fault Types</SelectItem>
+            </SelectContent>
+          </Select>
 
-        {relationType === 'areaToEquipment' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h3 className="font-semibold">Step 1: Link Equipment to an Area</h3>
-            <Label>Select an Area</Label>
-            <Select value={selectedArea} onValueChange={setSelectedArea}>
-              <SelectTrigger><SelectValue placeholder="Choose an area..." /></SelectTrigger>
-              <SelectContent>
-                {data.areas.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {selectedArea && (
-              <div className="space-y-2">
-                <Label>Select Equipment</Label>
-                <ScrollArea className="h-48 p-4 border rounded-md">
-                  <div className="grid grid-cols-2 gap-2">
-                    {data.equipment.map(eq => (
-                      <div key={eq.id} className="flex items-center space-x-2">
-                        <Checkbox id={`area-eq-${eq.id}`}
-                          checked={selectedEquipmentForArea.includes(eq.id)}
-                          onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForArea, eq.id, !!checked)}
-                        />
-                        <label htmlFor={`area-eq-${eq.id}`} className="text-sm">{eq.name}</label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-                 <Button onClick={handleSaveAreaToEquipment}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {relationType === 'equipmentToSystem' && (
-          <div className="space-y-4 pt-4 border-t">
-            <h3 className="font-semibold">Step 2: Link Systems to Equipment</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                 <Label>Select Equipment (one or more)</Label>
-                  <ScrollArea className="h-48 p-4 border rounded-md">
-                    <div className="space-y-2">
-                        {data.equipment.map(eq => (
-                            <div key={eq.id} className="flex items-center space-x-2">
-                                <Checkbox id={`eq-sys-eq-${eq.id}`}
-                                checked={selectedEquipmentForSystem.includes(eq.id)}
-                                onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForSystem, eq.id, !!checked)}
-                                />
-                                <label htmlFor={`eq-sys-eq-${eq.id}`} className="text-sm">{eq.name}</label>
-                            </div>
-                        ))}
-                    </div>
-                 </ScrollArea>
-              </div>
-               <div className="space-y-2">
-                 <Label>Select Systems (one or more)</Label>
-                  <ScrollArea className="h-48 p-4 border rounded-md">
-                     <div className="space-y-2">
-                        {data.systems.map(sys => (
-                            <div key={sys.id} className="flex items-center space-x-2">
-                                <Checkbox id={`eq-sys-sys-${sys.id}`}
-                                checked={selectedSystems.includes(sys.id)}
-                                onCheckedChange={(checked) => handleMultiSelect(setSelectedSystems, sys.id, !!checked)}
-                                />
-                                <label htmlFor={`eq-sys-sys-${sys.id}`} className="text-sm">{sys.name}</label>
-                            </div>
-                        ))}
-                    </div>
-                 </ScrollArea>
-              </div>
-            </div>
-            <Button onClick={handleSaveEquipmentToSystems}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
-          </div>
-        )}
-
-        {relationType === 'systemToResponsibility' && (
-           <div className="space-y-4 pt-4 border-t">
-             <h3 className="font-semibold">Step 3: Link Faults to System and Responsibility</h3>
-             <div className="grid md:grid-cols-2 gap-4">
+          {relationType === 'areaToEquipment' && (
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="font-semibold">Step 1: Link Equipment to an Area</h3>
+              <Label>Select an Area</Label>
+              <Select value={selectedArea} onValueChange={setSelectedArea}>
+                <SelectTrigger><SelectValue placeholder="Choose an area..." /></SelectTrigger>
+                <SelectContent>
+                  {data.areas.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {selectedArea && (
                 <div className="space-y-2">
-                    <Label>Select a System</Label>
-                    <Select value={selectedSystemForFaults} onValueChange={setSelectedSystemForFaults}>
-                        <SelectTrigger><SelectValue placeholder="Choose a system..." /></SelectTrigger>
-                        <SelectContent>
-                            {data.systems.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                  <Label>Select Equipment</Label>
+                  <ScrollArea className="h-48 p-4 border rounded-md">
+                    <div className="grid grid-cols-2 gap-2">
+                      {data.equipment.map(eq => (
+                        <div key={eq.id} className="flex items-center space-x-2">
+                          <Checkbox id={`area-eq-${eq.id}`}
+                            checked={selectedEquipmentForArea.includes(eq.id)}
+                            onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForArea, eq.id, !!checked)}
+                          />
+                          <label htmlFor={`area-eq-${eq.id}`} className="text-sm">{eq.name}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                   <Button onClick={handleSaveAreaToEquipment}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {relationType === 'equipmentToSystem' && (
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="font-semibold">Step 2: Link Systems to Equipment</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                   <Label>Select Equipment (one or more)</Label>
+                    <ScrollArea className="h-48 p-4 border rounded-md">
+                      <div className="space-y-2">
+                          {data.equipment.map(eq => (
+                              <div key={eq.id} className="flex items-center space-x-2">
+                                  <Checkbox id={`eq-sys-eq-${eq.id}`}
+                                  checked={selectedEquipmentForSystem.includes(eq.id)}
+                                  onCheckedChange={(checked) => handleMultiSelect(setSelectedEquipmentForSystem, eq.id, !!checked)}
+                                  />
+                                  <label htmlFor={`eq-sys-eq-${eq.id}`} className="text-sm">{eq.name}</label>
+                              </div>
+                          ))}
+                      </div>
+                   </ScrollArea>
                 </div>
                  <div className="space-y-2">
-                    <Label>Select a Responsibility</Label>
-                     <Select value={selectedResponsibility} onValueChange={setSelectedResponsibility}>
-                        <SelectTrigger><SelectValue placeholder="Choose a responsibility..." /></SelectTrigger>
-                        <SelectContent>
-                            {data.responsibilities.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-             </div>
-             {selectedSystemForFaults && selectedResponsibility && (
-                <div className="space-y-2">
-                    <Label>Select Faults</Label>
+                   <Label>Select Systems (one or more)</Label>
                     <ScrollArea className="h-48 p-4 border rounded-md">
-                        <div className="grid grid-cols-2 gap-2">
-                        {data.faults.map(f => (
-                            <div key={f.id} className="flex items-center space-x-2">
-                            <Checkbox id={`fault-${f.id}`}
-                                checked={selectedFaults.includes(f.id)}
-                                onCheckedChange={(checked) => handleMultiSelect(setSelectedFaults, f.id, !!checked)}
-                            />
-                            <label htmlFor={`fault-${f.id}`} className="text-sm">{f.name}</label>
-                            </div>
-                        ))}
-                        </div>
-                    </ScrollArea>
-                    <Button onClick={handleSaveSystemResponsibilityFaults}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+                       <div className="space-y-2">
+                          {data.systems.map(sys => (
+                              <div key={sys.id} className="flex items-center space-x-2">
+                                  <Checkbox id={`eq-sys-sys-${sys.id}`}
+                                  checked={selectedSystems.includes(sys.id)}
+                                  onCheckedChange={(checked) => handleMultiSelect(setSelectedSystems, sys.id, !!checked)}
+                                  />
+                                  <label htmlFor={`eq-sys-sys-${sys.id}`} className="text-sm">{sys.name}</label>
+                              </div>
+                          ))}
+                      </div>
+                   </ScrollArea>
                 </div>
-             )}
-           </div>
-        )}
+              </div>
+              <Button onClick={handleSaveEquipmentToSystems}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+            </div>
+          )}
 
-      </CardContent>
-    </Card>
+          {relationType === 'systemToResponsibility' && (
+             <div className="space-y-4 pt-4 border-t">
+               <h3 className="font-semibold">Step 3: Link Faults to System and Responsibility</h3>
+               <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                      <Label>Select a System</Label>
+                      <Select value={selectedSystemForFaults} onValueChange={setSelectedSystemForFaults}>
+                          <SelectTrigger><SelectValue placeholder="Choose a system..." /></SelectTrigger>
+                          <SelectContent>
+                              {data.systems.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                      </Select>
+                  </div>
+                   <div className="space-y-2">
+                      <Label>Select a Responsibility</Label>
+                       <Select value={selectedResponsibility} onValueChange={setSelectedResponsibility}>
+                          <SelectTrigger><SelectValue placeholder="Choose a responsibility..." /></SelectTrigger>
+                          <SelectContent>
+                              {data.responsibilities.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                          </SelectContent>
+                      </Select>
+                  </div>
+               </div>
+               {selectedSystemForFaults && selectedResponsibility && (
+                  <div className="space-y-2">
+                      <Label>Select Faults</Label>
+                      <ScrollArea className="h-48 p-4 border rounded-md">
+                          <div className="grid grid-cols-2 gap-2">
+                          {data.faults.map(f => (
+                              <div key={f.id} className="flex items-center space-x-2">
+                              <Checkbox id={`fault-${f.id}`}
+                                  checked={selectedFaults.includes(f.id)}
+                                  onCheckedChange={(checked) => handleMultiSelect(setSelectedFaults, f.id, !!checked)}
+                              />
+                              <label htmlFor={`fault-${f.id}`} className="text-sm">{f.name}</label>
+                              </div>
+                          ))}
+                          </div>
+                      </ScrollArea>
+                      <Button onClick={handleSaveSystemResponsibilityFaults}><Save className="mr-2 h-4 w-4"/> Save Relation</Button>
+                  </div>
+               )}
+             </div>
+          )}
+
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
