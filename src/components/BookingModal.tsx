@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useContext, useEffect, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +33,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Trash2 } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 
 
 const bookingSchema = z.object({
@@ -59,6 +60,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
   if (!context) return null;
 
   const { data, addBooking, updateBooking } = context;
+  const [timeRange, setTimeRange] = useState([0, 0]);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingSchema),
@@ -88,6 +90,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
         faultId: booking.faultId,
         comments: booking.comments,
       });
+      setTimeRange([booking.startTime, booking.endTime]);
     } else if (selection) {
         const equipmentAreaId = data.relations.areaToEquipment ? Object.keys(data.relations.areaToEquipment).find(areaId => 
             data.relations.areaToEquipment[areaId]?.includes(selection.equipmentId)
@@ -100,6 +103,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
           faultId: '', 
           comments: '' 
         });
+      setTimeRange([selection.startTime, selection.endTime]);
     }
   }, [booking, selection, isOpen, reset, data.relations.areaToEquipment]);
   
@@ -130,11 +134,11 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   // Effect to reset downstream fields when upstream changes
   useEffect(() => {
-    setValue('equipmentId', '');
+    if(!booking) setValue('equipmentId', '');
     setValue('systemId', '');
     setValue('responsibilityId', '');
     setValue('faultId', '');
-  }, [selectedAreaId, setValue]);
+  }, [selectedAreaId, setValue, booking]);
   
   useEffect(() => {
     setValue('systemId', '');
@@ -152,12 +156,23 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
   }, [selectedResponsibilityId, setValue]);
 
   const onSubmit = (formData: BookingFormData) => {
-    const submissionData = { ...formData };
-    
+    if (!selection) return;
+
+    const finalSelection = {
+        ...selection,
+        startTime: timeRange[0],
+        endTime: timeRange[1],
+    };
+
     if (booking) {
-      updateBooking({ ...booking, ...submissionData });
-    } else if (selection) {
-      addBooking(submissionData, selection);
+      updateBooking({ 
+          ...booking, 
+          ...formData,
+          startTime: timeRange[0],
+          endTime: timeRange[1] 
+        });
+    } else {
+      addBooking(formData, finalSelection);
     }
     onClose();
   };
@@ -173,6 +188,15 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
     const m = (minutes % 60).toString().padStart(2, '0');
     return `${h}:${m}`;
   };
+  
+  const formatDuration = (minutes: number) => {
+    const totalMinutes = (minutes + 24*60) % (24*60);
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${h}h ${m > 0 ? `${m}min` : ''}`;
+  }
+
 
   const initialEquipment = useMemo(() => data.equipment.find(e => e.id === selection?.equipmentId), [data.equipment, selection]);
 
@@ -181,15 +205,35 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{booking ? 'Edit' : 'Create'} Booking</DialogTitle>
           <DialogDescription>
-            For {initialEquipment?.name} from {formatTime(selection.startTime)} to {formatTime(selection.endTime)}.
+            For {initialEquipment?.name}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            
+            <div className="space-y-3">
+                <FormLabel>Time Range</FormLabel>
+                <div className="p-4 rounded-lg bg-secondary">
+                    <div className="flex justify-between items-center text-sm font-mono mb-2">
+                        <span>{formatTime(timeRange[0])}</span>
+                        <span className="text-muted-foreground text-xs">({formatDuration(timeRange[1] - timeRange[0])})</span>
+                        <span>{formatTime(timeRange[1])}</span>
+                    </div>
+                    <Slider
+                        value={timeRange}
+                        onValueChange={(newRange) => setTimeRange(newRange)}
+                        max={1440} // 24 * 60 minutes
+                        step={5}
+                        minStepsBetweenThumbs={1}
+                        className="w-full"
+                    />
+                </div>
+            </div>
+
             <FormField
               control={form.control}
               name="areaId"
@@ -303,3 +347,5 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
     </Dialog>
   );
 }
+
+    
