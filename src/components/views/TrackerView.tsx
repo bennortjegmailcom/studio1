@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
@@ -29,13 +30,23 @@ const formatTime = (minutes: number) => {
   return `${h}:${m}`;
 };
 
+const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes} min`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${m > 0 ? `${m}min` : ''}`;
+}
+
 export default function TrackerView() {
   const context = useContext(AppContext);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [selectionBox, setSelectionBox] = useState<React.CSSProperties>({});
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  
+  const [hoverTooltip, setHoverTooltip] = useState<{ visible: boolean; x: number; time: string }>({ visible: false, x: 0, time: '' });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
@@ -43,21 +54,19 @@ export default function TrackerView() {
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
 
-  const columnWidth = useMemo(() => {
-    if (timelineRef.current) {
-      return timelineRef.current.scrollWidth / NUM_COLUMNS;
-    }
-    return 4; // default width
-  }, [timelineRef.current?.scrollWidth]);
-  
+  const [columnWidth, setColumnWidth] = useState(4);
+
   useEffect(() => {
-    const handleResize = () => {
-      // force re-render to recalculate column width
-      setSelection(null);
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+    const calculateColumnWidth = () => {
+      if (timelineRef.current) {
+        setColumnWidth(timelineRef.current.scrollWidth / NUM_COLUMNS);
+      }
+    };
+
+    calculateColumnWidth();
+    window.addEventListener('resize', calculateColumnWidth);
+    return () => window.removeEventListener('resize', calculateColumnWidth);
+  }, []);
 
 
   if (!context) return <div>Loading...</div>;
@@ -93,13 +102,29 @@ export default function TrackerView() {
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+
+    // Hover Tooltip Logic
+    const colIndex = Math.floor(currentX / columnWidth);
+    const timeInMinutes = colIndex * TIME_INCREMENT;
+    if (timeInMinutes >= 0 && timeInMinutes < TOTAL_MINUTES) {
+        setHoverTooltip({
+            visible: true,
+            x: currentX,
+            time: formatTime(timeInMinutes)
+        });
+    } else {
+        setHoverTooltip(prev => ({...prev, visible: false}));
+    }
+
+
+    // Selection Logic
     if (!isSelecting || !selection) return;
 
-    const rect = timelineRef.current!.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    
     const startCol = Math.floor(startPos.x / columnWidth);
-    const currentCol = Math.max(0, Math.floor(currentX / columnWidth));
+    const currentCol = Math.max(0, colIndex);
 
     const left = Math.min(startCol, currentCol) * columnWidth;
     const width = (Math.abs(startCol - currentCol) + 1) * columnWidth;
@@ -118,8 +143,21 @@ export default function TrackerView() {
     }
     setIsSelecting(false);
   };
+
+  const handleMouseLeave = () => {
+    if (isSelecting) {
+        handleMouseUp();
+    }
+     setHoverTooltip(prev => ({...prev, visible: false}));
+  }
   
   const handleEdit = (booking: Booking) => {
+    const selection = {
+        equipmentId: booking.equipmentId,
+        startTime: booking.startTime,
+        endTime: booking.endTime
+    }
+    setSelection(selection);
     setEditingBooking(booking);
     setModalOpen(true);
   }
@@ -144,8 +182,19 @@ export default function TrackerView() {
       <CardHeader>
         <CardTitle>Equipment Timeline</CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="overflow-x-auto" ref={containerRef}>
         <div className="relative" style={{ minWidth: '1200px' }}>
+          
+          {/* Selection Info Box */}
+          {isSelecting && selection && (
+            <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono">
+                <span>{formatTime(selection.startTime)}</span>
+                <span className="mx-2">-</span>
+                <span>{formatTime(selection.endTime)}</span>
+                <span className="ml-4 font-sans text-muted-foreground">({formatDuration(selection.endTime - selection.startTime)})</span>
+            </div>
+          )}
+
           <div className="grid" style={{ gridTemplateColumns: '150px 1fr' }}>
             {/* Header: Equipment Names */}
             <div className="sticky left-0 z-20 font-semibold bg-card border-r border-b">Equipment</div>
@@ -168,8 +217,21 @@ export default function TrackerView() {
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
-              onMouseLeave={() => isSelecting && handleMouseUp()}
+              onMouseLeave={handleMouseLeave}
             >
+              {/* Hover Tooltip */}
+              {hoverTooltip.visible && !isSelecting && (
+                <div 
+                    className="absolute top-0 z-30 flex flex-col items-center pointer-events-none"
+                    style={{ transform: `translateX(${hoverTooltip.x}px)`}}
+                >
+                    <div className="bg-foreground text-background text-xs font-mono px-2 py-1 rounded-md -translate-x-1/2 -translate-y-[calc(100%+4px)]">
+                        {hoverTooltip.time}
+                    </div>
+                    <div className="w-px h-screen bg-foreground/50 -translate-y-[calc(100%+4px)]"></div>
+                </div>
+              )}
+
               {data.equipment.map((eq, rowIndex) => (
                 <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${NUM_COLUMNS}, minmax(0, 1fr))` }}>
                   {Array.from({ length: NUM_COLUMNS }).map((_, colIndex) => (
