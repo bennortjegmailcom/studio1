@@ -7,8 +7,6 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import BookingModal from '@/components/BookingModal';
 import type { Booking, Selection, Area } from '@/lib/types';
-import { MoreVertical } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -142,6 +140,9 @@ export default function TrackerView() {
   }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('[data-booking-id]')) {
+      return;
+    }
     if (e.button !== 0 || !timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -181,29 +182,33 @@ export default function TrackerView() {
 
   const findEquipmentByY = (y: number) => {
     let cumulativeHeight = 0;
+    let cumulativeRowIndex = 0;
     for (const area of areasWithEquipment) {
         const areaEquipmentCount = Math.max(1, area.equipment.length);
         const areaHeight = areaEquipmentCount * 50;
         if (y >= cumulativeHeight && y < cumulativeHeight + areaHeight) {
             const subRowIndex = Math.floor((y - cumulativeHeight) / 50);
-            return { equipment: area.equipment[subRowIndex], area };
+            return { equipment: area.equipment[subRowIndex], area, rowIndex: cumulativeRowIndex, subRowIndex };
         }
         cumulativeHeight += areaHeight;
+        cumulativeRowIndex += areaEquipmentCount;
     }
-    return { equipment: null, area: null };
+    return { equipment: null, area: null, rowIndex: -1, subRowIndex: -1 };
 };
 
 const findRowIndicesByY = (y: number) => {
     let rowIndex = 0;
     let subRowIndex = 0;
+    let cumulativeHeight = 0;
     for (const area of areasWithEquipment) {
         const areaEquipmentCount = Math.max(1, area.equipment.length);
         const areaHeight = areaEquipmentCount * 50;
-        if (y >= rowIndex * 50 && y < (rowIndex * 50) + areaHeight) {
-            subRowIndex = Math.floor((y - (rowIndex * 50)) / 50);
+        if (y >= cumulativeHeight && y < cumulativeHeight + areaHeight) {
+            rowIndex = Array.from({length: data.areas.indexOf(area)}).reduce((acc, _, i) => acc + Math.max(1, areasWithEquipment[i].equipment.length), 0);
+            subRowIndex = Math.floor((y - cumulativeHeight) / 50);
             break;
         }
-        rowIndex += areaEquipmentCount;
+        cumulativeHeight += areaHeight;
     }
     return { rowIndex, subRowIndex };
 };
@@ -304,6 +309,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
   }
 
   const handleDeleteRequest = (bookingId: string) => {
+    setModalOpen(false); // Close the edit modal if it's open
     setBookingToDelete(bookingId);
     setDeleteAlertOpen(true);
   }
@@ -445,7 +451,9 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                  return (
                    <div
                      key={booking.id}
-                     className="absolute h-[42px] rounded-md px-2 py-1 flex items-center justify-between text-white shadow-lg group"
+                     data-booking-id={booking.id}
+                     onClick={() => handleEdit(booking)}
+                     className="absolute h-[42px] rounded-md px-2 py-1 flex items-center justify-between text-white shadow-lg group cursor-pointer"
                      style={{
                        top: `${(rowIndex + subRowIndex) * 50 + 4}px`,
                        left: `${pos.left}%`,
@@ -457,17 +465,6 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                      <div className="truncate text-sm">
                        <strong>{system?.name}</strong> - {fault?.name}
                      </div>
-                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="opacity-0 group-hover:opacity-100 p-1 rounded-full bg-black/20 hover:bg-black/40 transition-opacity">
-                            <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(booking)}>Edit</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDeleteRequest(booking.id)} className="text-destructive">Delete</DropdownMenuItem>
-                      </DropdownMenuContent>
-                     </DropdownMenu>
                    </div>
                  );
               })}
@@ -483,6 +480,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
             }}
             selection={editingBooking ? {equipmentId: editingBooking.equipmentId, startTime: editingBooking.startTime, endTime: editingBooking.endTime} : selection}
             booking={editingBooking}
+            onDelete={handleDeleteRequest}
           />
         )}
         <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>

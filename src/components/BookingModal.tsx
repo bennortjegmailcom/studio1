@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useContext, useEffect, useMemo } from 'react';
@@ -31,6 +32,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Trash2 } from 'lucide-react';
 
 
 const bookingSchema = z.object({
@@ -49,9 +51,10 @@ interface BookingModalProps {
   onClose: () => void;
   selection: Selection | null;
   booking?: Booking | null;
+  onDelete?: (bookingId: string) => void;
 }
 
-export default function BookingModal({ isOpen, onClose, selection, booking }: BookingModalProps) {
+export default function BookingModal({ isOpen, onClose, selection, booking, onDelete }: BookingModalProps) {
   const context = useContext(AppContext);
   if (!context) return null;
 
@@ -158,6 +161,12 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
     }
     onClose();
   };
+
+  const handleDelete = () => {
+    if(booking && onDelete) {
+        onDelete(booking.id);
+    }
+  }
 
   const formatTime = (minutes: number) => {
     const h = Math.floor(minutes / 60).toString().padStart(2, '0');
@@ -274,9 +283,19 @@ export default function BookingModal({ isOpen, onClose, selection, booking }: Bo
                 </FormItem>
               )}
             />
-            <DialogFooter>
-                <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                <Button type="submit">Save Booking</Button>
+            <DialogFooter className="sm:justify-between">
+                <div>
+                 {booking && onDelete && (
+                    <Button type="button" variant="destructive" onClick={handleDelete} className="mr-auto">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                    </Button>
+                 )}
+                </div>
+                <div className="flex gap-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button type="submit">Save Booking</Button>
+                </div>
             </DialogFooter>
           </form>
         </Form>
