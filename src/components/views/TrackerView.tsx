@@ -6,7 +6,7 @@ import { AppContext } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import BookingModal from '@/components/BookingModal';
-import type { Booking, Selection } from '@/lib/types';
+import type { Booking, Selection, Area } from '@/lib/types';
 import { MoreVertical } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
@@ -65,6 +65,20 @@ export default function TrackerView() {
   const numColumns = totalMinutes / TIME_INCREMENT;
 
   const [columnWidth, setColumnWidth] = useState(0);
+  
+  const areasWithEquipment = useMemo(() => {
+    return data.areas.map(area => ({
+        ...area,
+        equipment: data.relations.areaToEquipment?.[area.id]?.map(eqId => 
+            data.equipment.find(eq => eq.id === eqId)
+        ).filter((eq): eq is NonNullable<typeof eq> => eq != null) || []
+    }));
+  }, [data.areas, data.equipment, data.relations.areaToEquipment]);
+
+  const totalEquipmentSlots = useMemo(() => {
+    return areasWithEquipment.reduce((acc, area) => acc + Math.max(1, area.equipment.length), 0);
+  }, [areasWithEquipment]);
+
 
   useEffect(() => {
     const calculateColumnWidth = () => {
@@ -130,8 +144,7 @@ export default function TrackerView() {
     setIsSelecting(true);
     setStartPos({ x, y });
 
-    const rowIndex = Math.floor(y / 50); // 50px row height
-    const equipment = data.equipment[rowIndex];
+    const { equipment } = findEquipmentByY(y);
     if (!equipment) return;
 
     const colIndex = Math.floor(x / columnWidth);
@@ -144,11 +157,14 @@ export default function TrackerView() {
         startTime = currentView.start + (colIndex * TIME_INCREMENT);
     }
 
+    const { rowIndex, subRowIndex } = findRowIndicesByY(y);
+    const topPos = (rowIndex + subRowIndex) * 50;
+
     setSelection({ equipmentId: equipment.id, startTime, endTime: startTime + TIME_INCREMENT });
     setSelectionBox({
       position: 'absolute',
       left: colIndex * columnWidth,
-      top: rowIndex * 50,
+      top: topPos,
       width: columnWidth,
       height: 50,
       backgroundColor: 'hsla(var(--primary), 0.3)',
@@ -156,6 +172,50 @@ export default function TrackerView() {
       pointerEvents: 'none'
     });
   };
+
+  const findEquipmentByY = (y: number) => {
+    let cumulativeHeight = 0;
+    for (const area of areasWithEquipment) {
+        const areaEquipmentCount = Math.max(1, area.equipment.length);
+        const areaHeight = areaEquipmentCount * 50;
+        if (y >= cumulativeHeight && y < cumulativeHeight + areaHeight) {
+            const subRowIndex = Math.floor((y - cumulativeHeight) / 50);
+            return { equipment: area.equipment[subRowIndex], area };
+        }
+        cumulativeHeight += areaHeight;
+    }
+    return { equipment: null, area: null };
+};
+
+const findRowIndicesByY = (y: number) => {
+    let rowIndex = 0;
+    let subRowIndex = 0;
+    let found = false;
+    for (const area of areasWithEquipment) {
+        const areaEquipmentCount = Math.max(1, area.equipment.length);
+        const areaHeight = areaEquipmentCount * 50;
+        if (y >= rowIndex * 50 && y < (rowIndex * 50) + areaHeight) {
+            subRowIndex = Math.floor((y - (rowIndex * 50)) / 50);
+            found = true;
+            break;
+        }
+        rowIndex += areaEquipmentCount;
+    }
+    return { rowIndex, subRowIndex };
+};
+
+const getBookingRowAndSubRow = (booking: Booking) => {
+    let rowIndex = 0;
+    for (const area of areasWithEquipment) {
+        const areaEquipmentCount = area.equipment.length;
+        const subRowIndex = area.equipment.findIndex(e => e.id === booking.equipmentId);
+        if (subRowIndex !== -1) {
+            return { rowIndex, subRowIndex };
+        }
+        rowIndex += Math.max(1, areaEquipmentCount);
+    }
+    return { rowIndex: -1, subRowIndex: -1 };
+};
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
@@ -289,8 +349,8 @@ export default function TrackerView() {
           )}
 
           <div className="grid min-h-full" style={{ gridTemplateColumns: '150px 1fr' }}>
-            {/* Header: Equipment Names */}
-            <div className="sticky left-0 z-20 font-semibold bg-card border-r border-b">Equipment</div>
+            {/* Header: Area Names */}
+            <div className="sticky left-0 z-20 font-semibold bg-card border-r border-b">Area</div>
             <div className="relative grid border-b" style={{ gridTemplateColumns: `repeat(${timeLabels.length}, minmax(0, 1fr))` }}>
               {timeLabels.map((label) => (
                 <div key={label} className="text-center p-2 border-r text-sm text-muted-foreground">{label}</div>
@@ -298,11 +358,11 @@ export default function TrackerView() {
             </div>
             {/* Body: Timeline Grid */}
             <div className="sticky left-0 z-20 bg-card border-r">
-              {data.equipment.map(eq => (
-                <div key={eq.id} className="flex items-center h-[50px] p-2 border-b whitespace-nowrap">
-                  {eq.name}
-                </div>
-              ))}
+                {areasWithEquipment.map(area => (
+                    <div key={area.id} className="font-semibold text-sm border-b" style={{ height: `${Math.max(1, area.equipment.length) * 50}px` }}>
+                        <div className="p-2 sticky top-0">{area.name}</div>
+                    </div>
+                ))}
             </div>
             <div
               ref={timelineRef}
@@ -311,33 +371,55 @@ export default function TrackerView() {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
+              style={{height: `${totalEquipmentSlots * 50}px`}}
             >
               {/* Hover Tooltip */}
               {hoverTooltip.visible && !isSelecting && (
                 <div 
                     className="absolute top-0 z-30 flex flex-col items-center pointer-events-none"
-                    style={{ transform: `translateX(${hoverTooltip.x}px)`}}
+                    style={{ transform: `translateX(${hoverTooltip.x}px)`, height: '100%'}}
                 >
                     <div className="bg-foreground text-background text-xs font-mono px-2 py-1 rounded-md -translate-x-1/2 -translate-y-[calc(100%+4px)]">
                         {hoverTooltip.time}
                     </div>
-                    <div className="w-px h-full bg-foreground/50 -translate-y-full"></div>
+                    <div className="w-px h-full bg-foreground/50"></div>
                 </div>
               )}
+                {/* Render grid and sub-rows */}
+                {(() => {
+                    let cumulativeHeight = 0;
+                    return areasWithEquipment.map(area => {
+                        const areaEquipmentCount = Math.max(1, area.equipment.length);
+                        const currentAreaHeight = cumulativeHeight;
+                        cumulativeHeight += areaEquipmentCount * 50;
 
-              {data.equipment.map((eq, rowIndex) => (
-                <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
-                  {Array.from({ length: numColumns }).map((_, colIndex) => (
-                     <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
-                  ))}
-                </div>
-              ))}
+                        return (
+                            <div key={area.id} className="absolute w-full" style={{ top: `${currentAreaHeight}px`, height: `${areaEquipmentCount * 50}px`}}>
+                                {area.equipment.map((eq, subIndex) => (
+                                    <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
+                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{eq.name}</div>
+                                        {Array.from({ length: numColumns }).map((_, colIndex) => (
+                                            <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
+                                        ))}
+                                    </div>
+                                ))}
+                                {area.equipment.length === 0 && (
+                                     <div className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
+                                         {Array.from({ length: numColumns }).map((_, colIndex) => (
+                                            <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    });
+                })()}
 
               {isSelecting && selectionBox && <div style={selectionBox}></div>}
 
               {/* Render Bookings */}
               {bookingsToday.map((booking) => {
-                 const rowIndex = data.equipment.findIndex(e => e.id === booking.equipmentId);
+                 const {rowIndex, subRowIndex} = getBookingRowAndSubRow(booking);
                  if (rowIndex === -1) return null;
                  
                  const pos = getPositionAndWidth(booking);
@@ -352,7 +434,7 @@ export default function TrackerView() {
                      key={booking.id}
                      className="absolute h-[42px] rounded-md px-2 py-1 flex items-center justify-between text-white shadow-lg group"
                      style={{
-                       top: `${rowIndex * 50 + 4}px`,
+                       top: `${(rowIndex + subRowIndex) * 50 + 4}px`,
                        left: `${pos.left}%`,
                        width: `${pos.width}%`,
                        backgroundColor: responsibility?.color || 'gray',
