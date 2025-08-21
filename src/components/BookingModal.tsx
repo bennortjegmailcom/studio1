@@ -81,6 +81,8 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
   const selectedResponsibilityId = watch('responsibilityId');
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (booking) {
       const areaId = data.areas.find(a => data.relations.areaToEquipment?.[a.id]?.includes(booking.equipmentId))?.id || '';
       reset({
@@ -103,7 +105,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
         });
       setTimeRange([selection.startTime, selection.endTime]);
     }
-  }, [booking, selection, isOpen, reset, data.relations.areaToEquipment, data.areas]);
+  }, [booking, selection, isOpen, reset, data]);
   
   const availableEquipment = useMemo(() => {
     if (!selectedAreaId || !data.relations.areaToEquipment) return [];
@@ -133,25 +135,19 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
   // Effect to reset downstream fields when upstream changes
   useEffect(() => {
     if(!booking || watch('areaId') !== selectedAreaId) setValue('equipmentId', '');
-    setValue('systemId', '');
-    setValue('responsibilityId', '');
-    setValue('faultId', '');
   }, [selectedAreaId, setValue, booking, watch]);
   
   useEffect(() => {
-    setValue('systemId', '');
-    setValue('responsibilityId', '');
-    setValue('faultId', '');
-  }, [selectedEquipmentId, setValue]);
+    if(!booking || watch('equipmentId') !== selectedEquipmentId) setValue('systemId', '');
+  }, [selectedEquipmentId, setValue, booking, watch]);
 
   useEffect(() => {
-    setValue('responsibilityId', '');
-    setValue('faultId', '');
-  }, [selectedSystemId, setValue]);
+    if(!booking || watch('systemId') !== selectedSystemId) setValue('responsibilityId', '');
+  }, [selectedSystemId, setValue, booking, watch]);
 
   useEffect(() => {
-    setValue('faultId', '');
-  }, [selectedResponsibilityId, setValue]);
+     if(!booking || watch('responsibilityId') !== selectedResponsibilityId) setValue('faultId', '');
+  }, [selectedResponsibilityId, setValue, booking, watch]);
 
   const onSubmit = (formData: BookingFormData) => {
     if (!selection) return;
