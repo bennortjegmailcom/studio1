@@ -7,7 +7,7 @@ import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, X } from 'lucide-react';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 
@@ -47,29 +47,42 @@ export default function MeetingView() {
     return totals;
   }, [bookingsToday]);
 
+  const areasWithEquipment = useMemo(() => {
+    return data.areas.map(area => ({
+        ...area,
+        equipment: data.relations.areaToEquipment?.[area.id]?.map(eqId => 
+            data.equipment.find(eq => eq.id === eqId)
+        ).filter((eq): eq is NonNullable<typeof eq> => eq != null) || []
+    }));
+  }, [data.areas, data.equipment, data.relations.areaToEquipment]);
+
   const handleExport = () => {
     let textContent = `Downtime Report for ${today}\n\n`;
     
-    data.equipment.forEach(eq => {
-      const equipmentBookings = bookingsToday.filter(b => b.equipmentId === eq.id)
-        .sort((a, b) => a.startTime - b.startTime);
-      
-      if (equipmentBookings.length > 0) {
-        textContent += `--- ${eq.name} ---\n`;
-        equipmentBookings.forEach(b => {
-          const system = data.systems.find(s => s.id === b.systemId)?.name || 'N/A';
-          const responsibility = data.responsibilities.find(r => r.id === b.responsibilityId)?.name || 'N/A';
-          const fault = data.faults.find(f => f.id === b.faultId)?.name || 'N/A';
-          const duration = b.endTime - b.startTime;
-          
-          textContent += `Time: ${formatTime(b.startTime)} - ${formatTime(b.endTime)} (${duration} mins)\n`;
-          textContent += `System: ${system}\n`;
-          textContent += `Responsibility: ${responsibility}\n`;
-          textContent += `Fault: ${fault}\n`;
-          textContent += `Comments: ${b.comments || 'None'}\n\n`;
+    areasWithEquipment.forEach(area => {
+        textContent += `====== AREA: ${area.name} ======\n\n`;
+        area.equipment.forEach(eq => {
+            const equipmentBookings = bookingsToday.filter(b => b.equipmentId === eq.id)
+                .sort((a, b) => a.startTime - b.startTime);
+            
+            if (equipmentBookings.length > 0) {
+                textContent += `--- ${eq.name} ---\n`;
+                equipmentBookings.forEach(b => {
+                const system = data.systems.find(s => s.id === b.systemId)?.name || 'N/A';
+                const responsibility = data.responsibilities.find(r => r.id === b.responsibilityId)?.name || 'N/A';
+                const fault = data.faults.find(f => f.id === b.faultId)?.name || 'N/A';
+                const duration = b.endTime - b.startTime;
+                
+                textContent += `Time: ${formatTime(b.startTime)} - ${formatTime(b.endTime)} (${duration} mins)\n`;
+                textContent += `System: ${system}\n`;
+                textContent += `Responsibility: ${responsibility}\n`;
+                textContent += `Fault: ${fault}\n`;
+                textContent += `Comments: ${b.comments || 'None'}\n\n`;
+                });
+            }
         });
-      }
     });
+    
 
     const blob = new Blob([textContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -109,45 +122,55 @@ export default function MeetingView() {
         <TooltipProvider delayDuration={100}>
             <ScrollArea className="flex-grow">
             <CardContent className="h-full">
-                <div className="space-y-4">
-                {data.equipment.map(eq => (
-                    <div key={eq.id}>
-                    <h3 className="font-semibold mb-2">{eq.name}</h3>
-                    <div className="relative w-full h-8 bg-secondary rounded-full overflow-hidden">
-                        {bookingsToday
-                        .filter(b => b.equipmentId === eq.id)
-                        .map(booking => {
-                            const left = (booking.startTime / (24 * 60)) * 100;
-                            const width = ((booking.endTime - booking.startTime) / (24 * 60)) * 100;
-                            const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
-                            const system = data.systems.find(s => s.id === booking.systemId);
-                            const fault = data.faults.find(f => f.id === booking.faultId);
-                            const duration = booking.endTime - booking.startTime;
-                            
-                            return (
-                                <Tooltip key={booking.id}>
-                                    <TooltipTrigger asChild>
-                                        <div
-                                            className="absolute h-full cursor-pointer hover:opacity-80 transition-opacity"
-                                            style={{
-                                                left: `${left}%`,
-                                                width: `${width}%`,
-                                                backgroundColor: responsibility?.color || 'gray',
-                                            }}
-                                            onClick={() => setSelectedBooking(booking)}
-                                        ></div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p><strong>Duration:</strong> {formatDuration(duration)}</p>
-                                        <p><strong>Responsibility:</strong> {responsibility?.name || 'N/A'}</p>
-                                        <p><strong>System:</strong> {system?.name || 'N/A'}</p>
-                                        <p><strong>Fault:</strong> {fault?.name || 'N/A'}</p>
-                                        <p><strong>Comments:</strong> {booking.comments ? `"${booking.comments}"` : 'None'}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            );
-                        })}
-                    </div>
+                <div className="space-y-6">
+                {areasWithEquipment.map(area => (
+                    <div key={area.id}>
+                        <h2 className="text-lg font-bold mb-3">{area.name}</h2>
+                        <div className="space-y-4 pl-4 border-l-2">
+                            {area.equipment.map(eq => (
+                                <div key={eq.id}>
+                                <h3 className="font-semibold mb-2">{eq.name}</h3>
+                                <div className="relative w-full h-8 bg-secondary rounded-full overflow-hidden">
+                                    {bookingsToday
+                                    .filter(b => b.equipmentId === eq.id)
+                                    .map(booking => {
+                                        const left = (booking.startTime / (24 * 60)) * 100;
+                                        const width = ((booking.endTime - booking.startTime) / (24 * 60)) * 100;
+                                        const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
+                                        const system = data.systems.find(s => s.id === booking.systemId);
+                                        const fault = data.faults.find(f => f.id === booking.faultId);
+                                        const duration = booking.endTime - booking.startTime;
+                                        
+                                        return (
+                                            <Tooltip key={booking.id}>
+                                                <TooltipTrigger asChild>
+                                                    <div
+                                                        className="absolute h-full cursor-pointer hover:opacity-80 transition-opacity"
+                                                        style={{
+                                                            left: `${left}%`,
+                                                            width: `${width}%`,
+                                                            backgroundColor: responsibility?.color || 'gray',
+                                                        }}
+                                                        onClick={() => setSelectedBooking(booking)}
+                                                    ></div>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p><strong>Duration:</strong> {formatDuration(duration)}</p>
+                                                    <p><strong>Responsibility:</strong> {responsibility?.name || 'N/A'}</p>
+                                                    <p><strong>System:</strong> {system?.name || 'N/A'}</p>
+                                                    <p><strong>Fault:</strong> {fault?.name || 'N/A'}</p>
+                                                    <p><strong>Comments:</strong> {booking.comments ? `"${booking.comments}"` : 'None'}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        );
+                                    })}
+                                </div>
+                                </div>
+                            ))}
+                             {area.equipment.length === 0 && (
+                                <p className="text-sm text-muted-foreground">No equipment assigned to this area.</p>
+                             )}
+                        </div>
                     </div>
                 ))}
                 </div>
