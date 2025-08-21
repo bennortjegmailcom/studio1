@@ -36,10 +36,11 @@ const formatDuration = (minutes: number) => {
 }
 
 const viewConfig = {
-    '24h': { start: 0, end: 24 * 60, hours: 24, labelEvery: 1 },
+    '24h': { start: 6 * 60, end: 30 * 60, hours: 24, labelEvery: 1 }, // 6am to 6am next day
     'day': { start: 6 * 60, end: 18 * 60, hours: 12, labelEvery: 1 },
-    'night': { start: 18 * 60, end: 6 * 60, hours: 12, labelEvery: 1 }
+    'night': { start: 18 * 60, end: 6 * 60, hours: 12, labelEvery: 1 } // Wraps around midnight
 };
+
 
 export default function TrackerView() {
   const context = useContext(AppContext);
@@ -96,21 +97,26 @@ export default function TrackerView() {
 
 
   const getPositionAndWidth = (booking: Booking) => {
-    const bookingStart = booking.startTime;
-    const bookingEnd = booking.endTime;
+    // Adjust booking times for the next day if they cross midnight and the view is 24h
+    const date = new Date(booking.date);
+    const todayDate = new Date(today);
+    const dayDiff = (date.getTime() - todayDate.getTime()) / (1000 * 3600 * 24);
+
+    const bookingStart = booking.startTime + (dayDiff * 24 * 60);
+    const bookingEnd = booking.endTime + (dayDiff * 24 * 60);
 
     let startPos = -1, endPos = -1;
 
     if (trackerVewType === 'night') {
         const nightDuration = 12 * 60;
         let effectiveStart = -1;
-        if(bookingStart >= 18*60) effectiveStart = bookingStart - 18*60;
-        else if(bookingStart < 6*60) effectiveStart = bookingStart + 6*60;
+        if(booking.startTime >= 18*60) effectiveStart = booking.startTime - 18*60;
+        else if(booking.startTime < 6*60) effectiveStart = booking.startTime + 6*60;
         
         let effectiveEnd = -1;
-        if(bookingEnd > 18*60) effectiveEnd = bookingEnd - 18*60;
-        else if(bookingEnd <= 6*60) effectiveEnd = bookingEnd + 6*60;
-        else if (bookingEnd > 6*60 && bookingStart >= 18*60) effectiveEnd = nightDuration;
+        if(booking.endTime > 18*60) effectiveEnd = booking.endTime - 18*60;
+        else if(booking.endTime <= 6*60) effectiveEnd = booking.endTime + 6*60;
+        else if (booking.endTime > 6*60 && booking.startTime >= 18*60) effectiveEnd = nightDuration;
 
 
         if(effectiveStart !== -1 && effectiveEnd !== -1 && effectiveEnd > effectiveStart){
@@ -160,7 +166,7 @@ export default function TrackerView() {
     const { rowIndex, subRowIndex } = findRowIndicesByY(y);
     const topPos = (rowIndex + subRowIndex) * 50;
 
-    setSelection({ equipmentId: equipment.id, startTime, endTime: startTime + TIME_INCREMENT });
+    setSelection({ equipmentId: equipment.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24 * 60) });
     setSelectionBox({
       position: 'absolute',
       left: colIndex * columnWidth,
@@ -190,13 +196,11 @@ export default function TrackerView() {
 const findRowIndicesByY = (y: number) => {
     let rowIndex = 0;
     let subRowIndex = 0;
-    let found = false;
     for (const area of areasWithEquipment) {
         const areaEquipmentCount = Math.max(1, area.equipment.length);
         const areaHeight = areaEquipmentCount * 50;
         if (y >= rowIndex * 50 && y < (rowIndex * 50) + areaHeight) {
             subRowIndex = Math.floor((y - (rowIndex * 50)) / 50);
-            found = true;
             break;
         }
         rowIndex += areaEquipmentCount;
@@ -228,16 +232,16 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     let timeInMinutes;
      if (trackerVewType === 'night') {
         const minutesIntoShift = colIndex * TIME_INCREMENT;
-        timeInMinutes = (18 * 60 + minutesIntoShift) % (24 * 60);
+        timeInMinutes = (18 * 60 + minutesIntoShift);
     } else {
         timeInMinutes = currentView.start + colIndex * TIME_INCREMENT;
     }
 
-    if (timeInMinutes >= 0 && timeInMinutes < 24 * 60) {
+    if (timeInMinutes >= 0) {
         setHoverTooltip({
             visible: true,
             x: currentX,
-            time: formatTime(timeInMinutes)
+            time: formatTime(timeInMinutes % (24*60))
         });
     } else {
         setHoverTooltip(prev => ({...prev, visible: false}));
@@ -271,7 +275,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     }
 
 
-    setSelection(prev => prev ? { ...prev, startTime: newStartTime, endTime: newEndTime } : null);
+    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24*60) } : null);
   };
 
   const handleMouseUp = () => {
@@ -311,8 +315,16 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     setDeleteAlertOpen(false);
     setBookingToDelete(null);
   }
+  
+  const bookingsForView = useMemo(() => {
+    const todayDate = new Date(today);
+    const tomorrowDate = new Date(todayDate);
+    tomorrowDate.setDate(todayDate.getDate() + 1);
+    const tomorrowString = tomorrowDate.toISOString().split('T')[0];
+    
+    return data.bookings.filter(b => b.date === today || (trackerVewType === '24h' && b.date === tomorrowString) || (trackerVewType === 'night' && b.date === tomorrowString));
+  }, [data.bookings, today, trackerVewType]);
 
-  const bookingsToday = data.bookings.filter(b => b.date === today);
 
   const timeLabels = useMemo(() => {
     const labels = [];
@@ -323,7 +335,8 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     } else {
         for (let i = 0; i < currentView.hours; i++) {
             if (i % currentView.labelEvery === 0) {
-                 labels.push(`${(currentView.start / 60 + i).toString().padStart(2, '0')}:00`);
+                 const hour = (currentView.start / 60 + i) % 24;
+                 labels.push(`${hour.toString().padStart(2, '0')}:00`);
             }
         }
     }
@@ -344,7 +357,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                 <span className="ml-2">{formatTime(selection.startTime)}</span>
                 <span className="mx-2">-</span>
                 <span>{formatTime(selection.endTime)}</span>
-                <span className="ml-4 font-sans text-muted-foreground">({formatDuration(selection.endTime - selection.startTime)})</span>
+                <span className="ml-4 font-sans text-muted-foreground">({formatDuration((selection.endTime - selection.startTime + 24*60) % (24*60) )})</span>
             </div>
           )}
 
@@ -418,7 +431,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
               {isSelecting && selectionBox && <div style={selectionBox}></div>}
 
               {/* Render Bookings */}
-              {bookingsToday.map((booking) => {
+              {bookingsForView.map((booking) => {
                  const {rowIndex, subRowIndex} = getBookingRowAndSubRow(booking);
                  if (rowIndex === -1) return null;
                  
