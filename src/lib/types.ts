@@ -1,3 +1,4 @@
+
 export interface Responsibility {
   id: string;
   name: string;
@@ -55,7 +56,8 @@ export interface AppData {
 }
 
 export interface Selection {
-  equipmentId: string;
+  areaId?: string;
+  equipmentId?: string;
   startTime: number;
   endTime: number;
 }

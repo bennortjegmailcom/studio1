@@ -82,8 +82,9 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   useEffect(() => {
     if (booking) {
+      const areaId = data.areas.find(a => data.relations.areaToEquipment?.[a.id]?.includes(booking.equipmentId))?.id || '';
       reset({
-        areaId: booking.areaId,
+        areaId: areaId,
         equipmentId: booking.equipmentId,
         systemId: booking.systemId,
         responsibilityId: booking.responsibilityId,
@@ -92,12 +93,9 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
       });
       setTimeRange([booking.startTime, booking.endTime]);
     } else if (selection) {
-        const equipmentAreaId = data.relations.areaToEquipment ? Object.keys(data.relations.areaToEquipment).find(areaId => 
-            data.relations.areaToEquipment[areaId]?.includes(selection.equipmentId)
-        ) : undefined;
       reset({ 
-          areaId: equipmentAreaId || '', 
-          equipmentId: selection.equipmentId,
+          areaId: selection.areaId || '', 
+          equipmentId: selection.equipmentId || '',
           systemId: '',
           responsibilityId: '', 
           faultId: '', 
@@ -105,7 +103,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
         });
       setTimeRange([selection.startTime, selection.endTime]);
     }
-  }, [booking, selection, isOpen, reset, data.relations.areaToEquipment]);
+  }, [booking, selection, isOpen, reset, data.relations.areaToEquipment, data.areas]);
   
   const availableEquipment = useMemo(() => {
     if (!selectedAreaId || !data.relations.areaToEquipment) return [];
@@ -134,11 +132,11 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   // Effect to reset downstream fields when upstream changes
   useEffect(() => {
-    if(!booking) setValue('equipmentId', '');
+    if(!booking || watch('areaId') !== selectedAreaId) setValue('equipmentId', '');
     setValue('systemId', '');
     setValue('responsibilityId', '');
     setValue('faultId', '');
-  }, [selectedAreaId, setValue, booking]);
+  }, [selectedAreaId, setValue, booking, watch]);
   
   useEffect(() => {
     setValue('systemId', '');
@@ -160,6 +158,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
     const finalSelection = {
         ...selection,
+        equipmentId: formData.equipmentId, // Make sure equipmentId is passed
         startTime: timeRange[0],
         endTime: timeRange[1],
     };
@@ -197,8 +196,8 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
     return `${h}h ${m > 0 ? `${m}min` : ''}`;
   }
 
-
-  const initialEquipment = useMemo(() => data.equipment.find(e => e.id === selection?.equipmentId), [data.equipment, selection]);
+  const selectedAreaName = useMemo(() => data.areas.find(a => a.id === selectedAreaId)?.name, [data.areas, selectedAreaId]);
+  const selectedEquipmentName = useMemo(() => data.equipment.find(e => e.id === selectedEquipmentId)?.name, [data.equipment, selectedEquipmentId]);
 
 
   if (!selection) return null;
@@ -209,7 +208,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
         <DialogHeader>
           <DialogTitle>{booking ? 'Edit' : 'Create'} Booking</DialogTitle>
           <DialogDescription>
-            For {initialEquipment?.name}
+            {booking ? `For ${selectedEquipmentName || '...'} in ${selectedAreaName || '...'}` : `For area: ${selectedAreaName || '...'}`}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -347,5 +346,3 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
     </Dialog>
   );
 }
-
-    

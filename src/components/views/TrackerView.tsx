@@ -36,7 +36,7 @@ const formatDuration = (minutes: number) => {
 const viewConfig = {
     '24h': { start: 6 * 60, end: 30 * 60, hours: 24, labelEvery: 1 }, // 6am to 6am next day
     'day': { start: 6 * 60, end: 18 * 60, hours: 12, labelEvery: 1 },
-    'night': { start: 18 * 60, end: 6 * 60, hours: 12, labelEvery: 1 } // Wraps around midnight
+    'night': { start: 18 * 60, end: 30 * 60, hours: 12, labelEvery: 1 } // Wraps around midnight
 };
 
 
@@ -75,8 +75,8 @@ export default function TrackerView() {
   }, [data.areas, data.equipment, data.relations.areaToEquipment]);
 
   const totalEquipmentSlots = useMemo(() => {
-    return areasWithEquipment.reduce((acc, area) => acc + Math.max(1, area.equipment.length), 0);
-  }, [areasWithEquipment]);
+    return data.areas.length;
+  }, [data.areas]);
 
 
   useEffect(() => {
@@ -107,21 +107,22 @@ export default function TrackerView() {
 
     if (trackerVewType === 'night') {
         const nightDuration = 12 * 60;
-        let effectiveStart = -1;
-        if(booking.startTime >= 18*60) effectiveStart = booking.startTime - 18*60;
-        else if(booking.startTime < 6*60) effectiveStart = booking.startTime + 6*60;
         
-        let effectiveEnd = -1;
-        if(booking.endTime > 18*60) effectiveEnd = booking.endTime - 18*60;
-        else if(booking.endTime <= 6*60) effectiveEnd = booking.endTime + 6*60;
-        else if (booking.endTime > 6*60 && booking.startTime >= 18*60) effectiveEnd = nightDuration;
+        // Normalize booking times to a single 24-hour cycle starting from the beginning of `today`
+        const normalizedStart = booking.startTime + (dayDiff * 24 * 60);
+        const normalizedEnd = booking.endTime + (dayDiff * 24 * 60);
 
+        // Define night shift boundaries in the same normalized coordinate system
+        const shiftStart = 18 * 60; // 18:00 today
+        const shiftEnd = (6 * 60) + (24 * 60); // 06:00 tomorrow
 
-        if(effectiveStart !== -1 && effectiveEnd !== -1 && effectiveEnd > effectiveStart){
-            startPos = effectiveStart / nightDuration;
-            endPos = effectiveEnd / nightDuration;
+        const clampedStart = Math.max(normalizedStart, shiftStart);
+        const clampedEnd = Math.min(normalizedEnd, shiftEnd);
+
+        if (clampedEnd > clampedStart) {
+            startPos = (clampedStart - shiftStart) / nightDuration;
+            endPos = (clampedEnd - shiftStart) / nightDuration;
         }
-
     } else {
        if (bookingStart < currentView.end && bookingEnd > currentView.start) {
            const clampedStart = Math.max(bookingStart, currentView.start);
@@ -131,7 +132,7 @@ export default function TrackerView() {
        }
     }
 
-    if(startPos === -1 || endPos === -1 || endPos < startPos) return null;
+    if(startPos === -1 || endPos === -1 || endPos <= startPos) return null;
 
     return {
         left: startPos * 100,
@@ -151,8 +152,8 @@ export default function TrackerView() {
     setIsSelecting(true);
     setStartPos({ x, y });
 
-    const { equipment } = findEquipmentByY(y);
-    if (!equipment) return;
+    const area = findAreaByY(y);
+    if (!area) return;
 
     const colIndex = Math.floor(x / columnWidth);
     
@@ -164,10 +165,10 @@ export default function TrackerView() {
         startTime = currentView.start + (colIndex * TIME_INCREMENT);
     }
 
-    const { rowIndex, subRowIndex } = findRowIndicesByY(y);
-    const topPos = (rowIndex + subRowIndex) * 50;
+    const rowIndex = findRowIndexByY(y);
+    const topPos = rowIndex * 50;
 
-    setSelection({ equipmentId: equipment.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24 * 60) });
+    setSelection({ areaId: area.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24 * 60) });
     setSelectionBox({
       position: 'absolute',
       left: colIndex * columnWidth,
@@ -180,51 +181,20 @@ export default function TrackerView() {
     });
   };
 
-  const findEquipmentByY = (y: number) => {
-    let cumulativeHeight = 0;
-    let cumulativeRowIndex = 0;
-    for (const area of areasWithEquipment) {
-        const areaEquipmentCount = Math.max(1, area.equipment.length);
-        const areaHeight = areaEquipmentCount * 50;
-        if (y >= cumulativeHeight && y < cumulativeHeight + areaHeight) {
-            const subRowIndex = Math.floor((y - cumulativeHeight) / 50);
-            return { equipment: area.equipment[subRowIndex], area, rowIndex: cumulativeRowIndex, subRowIndex };
-        }
-        cumulativeHeight += areaHeight;
-        cumulativeRowIndex += areaEquipmentCount;
-    }
-    return { equipment: null, area: null, rowIndex: -1, subRowIndex: -1 };
-};
+  const findAreaByY = (y: number) => {
+    const rowIndex = Math.floor(y / 50);
+    return data.areas[rowIndex];
+  };
 
-const findRowIndicesByY = (y: number) => {
-    let rowIndex = 0;
-    let subRowIndex = 0;
-    let cumulativeHeight = 0;
-    for (const area of areasWithEquipment) {
-        const areaEquipmentCount = Math.max(1, area.equipment.length);
-        const areaHeight = areaEquipmentCount * 50;
-        if (y >= cumulativeHeight && y < cumulativeHeight + areaHeight) {
-            rowIndex = Array.from({length: data.areas.indexOf(area)}).reduce((acc, _, i) => acc + Math.max(1, areasWithEquipment[i].equipment.length), 0);
-            subRowIndex = Math.floor((y - cumulativeHeight) / 50);
-            break;
-        }
-        cumulativeHeight += areaHeight;
-    }
-    return { rowIndex, subRowIndex };
-};
+  const findRowIndexByY = (y: number) => {
+    return Math.floor(y/50);
+  };
 
-const getBookingRowAndSubRow = (booking: Booking) => {
-    let rowIndex = 0;
-    for (const area of areasWithEquipment) {
-        const areaEquipmentCount = area.equipment.length;
-        const subRowIndex = area.equipment.findIndex(e => e.id === booking.equipmentId);
-        if (subRowIndex !== -1) {
-            return { rowIndex, subRowIndex };
-        }
-        rowIndex += Math.max(1, areaEquipmentCount);
-    }
-    return { rowIndex: -1, subRowIndex: -1 };
-};
+  const getBookingAreaRow = (booking: Booking) => {
+    const area = data.areas.find(a => data.relations.areaToEquipment?.[a.id]?.includes(booking.equipmentId));
+    if (!area) return -1;
+    return data.areas.indexOf(area);
+  };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
@@ -280,7 +250,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     }
 
 
-    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24*60) } : null);
+    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24 * 60) } : null);
   };
 
   const handleMouseUp = () => {
@@ -298,7 +268,9 @@ const getBookingRowAndSubRow = (booking: Booking) => {
   }
   
   const handleEdit = (booking: Booking) => {
+    const areaId = data.areas.find(a => data.relations.areaToEquipment?.[a.id]?.includes(booking.equipmentId))?.id;
     const selection = {
+        areaId: areaId,
         equipmentId: booking.equipmentId,
         startTime: booking.startTime,
         endTime: booking.endTime
@@ -309,7 +281,6 @@ const getBookingRowAndSubRow = (booking: Booking) => {
   }
 
   const handleDeleteRequest = (bookingId: string) => {
-    setModalOpen(false); // Close the edit modal if it's open
     setBookingToDelete(bookingId);
     setDeleteAlertOpen(true);
   }
@@ -320,6 +291,9 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     }
     setDeleteAlertOpen(false);
     setBookingToDelete(null);
+    setModalOpen(false);
+    setEditingBooking(null);
+    setSelection(null);
   }
   
   const bookingsForView = useMemo(() => {
@@ -328,16 +302,18 @@ const getBookingRowAndSubRow = (booking: Booking) => {
     tomorrowDate.setDate(todayDate.getDate() + 1);
     const tomorrowString = tomorrowDate.toISOString().split('T')[0];
     
-    return data.bookings.filter(b => b.date === today || (trackerVewType === '24h' && b.date === tomorrowString) || (trackerVewType === 'night' && b.date === tomorrowString));
+    return data.bookings.filter(b => b.date === today || ((trackerVewType === '24h' || trackerVewType === 'night') && b.date === tomorrowString));
   }, [data.bookings, today, trackerVewType]);
 
 
   const timeLabels = useMemo(() => {
     const labels = [];
     if(trackerVewType === 'night') {
-        for (let i = 0; i < 6; i++) labels.push(`${18 + i}:00`);
-        labels.push("00:00");
-        for (let i = 1; i < 6; i++) labels.push(`0${i}:00`);
+        // Night shift from 18:00 to 06:00
+        for (let i = 0; i < 12; i++) {
+           const hour = (18 + i) % 24;
+           labels.push(`${hour.toString().padStart(2, '0')}:00`);
+        }
     } else {
         for (let i = 0; i < currentView.hours; i++) {
             if (i % currentView.labelEvery === 0) {
@@ -377,9 +353,9 @@ const getBookingRowAndSubRow = (booking: Booking) => {
             </div>
             {/* Body: Timeline Grid */}
             <div className="sticky left-0 z-20 bg-card border-r">
-                {areasWithEquipment.map(area => (
-                    <div key={area.id} className="font-semibold text-sm border-b" style={{ height: `${Math.max(1, area.equipment.length) * 50}px` }}>
-                        <div className="p-2 sticky top-0">{area.name}</div>
+                {data.areas.map(area => (
+                    <div key={area.id} className="font-semibold text-sm border-b flex items-center p-2" style={{ height: `50px` }}>
+                        {area.name}
                     </div>
                 ))}
             </div>
@@ -405,40 +381,19 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                 </div>
               )}
                 {/* Render grid and sub-rows */}
-                {(() => {
-                    let cumulativeHeight = 0;
-                    return areasWithEquipment.map(area => {
-                        const areaEquipmentCount = Math.max(1, area.equipment.length);
-                        const currentAreaHeight = cumulativeHeight;
-                        cumulativeHeight += areaEquipmentCount * 50;
-
-                        return (
-                            <div key={area.id} className="absolute w-full" style={{ top: `${currentAreaHeight}px`, height: `${areaEquipmentCount * 50}px`}}>
-                                {area.equipment.map((eq, subIndex) => (
-                                    <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
-                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{eq.name}</div>
-                                        {Array.from({ length: numColumns }).map((_, colIndex) => (
-                                            <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
-                                        ))}
-                                    </div>
-                                ))}
-                                {area.equipment.length === 0 && (
-                                     <div className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
-                                         {Array.from({ length: numColumns }).map((_, colIndex) => (
-                                            <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    });
-                })()}
+                {data.areas.map((area, areaIndex) => (
+                    <div key={area.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
+                        {Array.from({ length: numColumns }).map((_, colIndex) => (
+                            <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
+                        ))}
+                    </div>
+                ))}
 
               {isSelecting && selectionBox && <div style={selectionBox}></div>}
 
               {/* Render Bookings */}
               {bookingsForView.map((booking) => {
-                 const {rowIndex, subRowIndex} = getBookingRowAndSubRow(booking);
+                 const rowIndex = getBookingAreaRow(booking);
                  if (rowIndex === -1) return null;
                  
                  const pos = getPositionAndWidth(booking);
@@ -447,23 +402,27 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                  const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
                  const system = data.systems.find(s => s.id === booking.systemId);
                  const fault = data.faults.find(s => s.id === booking.faultId);
+                 const equipment = data.equipment.find(e => e.id === booking.equipmentId);
 
                  return (
                    <div
                      key={booking.id}
                      data-booking-id={booking.id}
                      onClick={() => handleEdit(booking)}
-                     className="absolute h-[42px] rounded-md px-2 py-1 flex items-center justify-between text-white shadow-lg group cursor-pointer"
+                     className="absolute h-[42px] rounded-md px-2 py-1 flex flex-col items-start justify-center text-white shadow-lg group cursor-pointer"
                      style={{
-                       top: `${(rowIndex + subRowIndex) * 50 + 4}px`,
+                       top: `${rowIndex * 50 + 4}px`,
                        left: `${pos.left}%`,
                        width: `${pos.width}%`,
                        backgroundColor: responsibility?.color || 'gray',
-                       minWidth: '100px',
+                       minWidth: '120px',
                      }}
                    >
-                     <div className="truncate text-sm">
-                       <strong>{system?.name}</strong> - {fault?.name}
+                     <div className="truncate text-xs font-bold leading-tight">
+                       {equipment?.name}
+                     </div>
+                     <div className="truncate text-xs leading-tight">
+                       {system?.name} - {fault?.name}
                      </div>
                    </div>
                  );
@@ -478,7 +437,7 @@ const getBookingRowAndSubRow = (booking: Booking) => {
                 setSelection(null);
                 setEditingBooking(null);
             }}
-            selection={editingBooking ? {equipmentId: editingBooking.equipmentId, startTime: editingBooking.startTime, endTime: editingBooking.endTime} : selection}
+            selection={selection}
             booking={editingBooking}
             onDelete={handleDeleteRequest}
           />
