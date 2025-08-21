@@ -270,7 +270,6 @@ export default function TrackerView() {
     return labels;
   }, [trackerVewType, currentView]);
 
-
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
