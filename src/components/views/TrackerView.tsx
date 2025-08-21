@@ -182,13 +182,14 @@ export default function TrackerView() {
       <CardHeader>
         <CardTitle>Equipment Timeline</CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto" ref={containerRef}>
+      <CardContent className="overflow-x-auto pt-8" ref={containerRef}>
         <div className="relative" style={{ minWidth: '1200px' }}>
           
           {/* Selection Info Box */}
           {isSelecting && selection && (
-            <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono">
-                <span>{formatTime(selection.startTime)}</span>
+            <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono whitespace-nowrap">
+                <span className="text-primary font-semibold">Selection:</span>
+                <span className="ml-2">{formatTime(selection.startTime)}</span>
                 <span className="mx-2">-</span>
                 <span>{formatTime(selection.endTime)}</span>
                 <span className="ml-4 font-sans text-muted-foreground">({formatDuration(selection.endTime - selection.startTime)})</span>
