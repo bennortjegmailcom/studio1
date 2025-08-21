@@ -15,11 +15,14 @@ import { Calendar as CalendarIcon, GanttChartSquare, Users, Bot, Settings, Chevr
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, addDays, subDays } from 'date-fns';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type View = 'tracker' | 'meeting' | 'autobooker' | 'admin';
+export type TrackerViewType = '24h' | 'day' | 'night';
 
-function AppHeader({ activeView, onSelectView }: { activeView: View; onSelectView: (view: View) => void }) {
+function AppHeader({ activeView }: { activeView: View }) {
   const { today, setToday } = React.useContext(AppContext)!;
+  const { trackerVewType, setTrackerViewType } = React.useContext(AppContext)!;
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
@@ -62,7 +65,17 @@ function AppHeader({ activeView, onSelectView }: { activeView: View; onSelectVie
           </>
         ) : <div className="w-[360px]"></div>}
       </div>
-      <div></div>
+      <div className="w-[240px] flex justify-end">
+        {activeView === 'tracker' && (
+           <Tabs value={trackerVewType} onValueChange={(value) => setTrackerViewType(value as TrackerViewType)}>
+            <TabsList>
+                <TabsTrigger value="24h">24h</TabsTrigger>
+                <TabsTrigger value="day">Day</TabsTrigger>
+                <TabsTrigger value="night">Night</TabsTrigger>
+            </TabsList>
+           </Tabs>
+        )}
+      </div>
     </header>
   );
 }
@@ -71,6 +84,7 @@ export default function ClientPage() {
   const [data, setData] = useLocalStorage<AppData>('equip-track-ai-data', initialData);
   const [activeView, setActiveView] = useState<View>('tracker');
   const [today, setToday] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [trackerVewType, setTrackerViewType] = useState<TrackerViewType>('24h');
 
   const addBooking = useCallback((bookingData: Omit<Booking, 'id' | 'date'>, selection: Selection) => {
     setData(prevData => {
@@ -108,6 +122,8 @@ export default function ClientPage() {
     deleteBooking,
     today,
     setToday,
+    trackerVewType,
+    setTrackerViewType,
   };
 
   const renderView = () => {
@@ -166,7 +182,7 @@ export default function ClientPage() {
             </SidebarContent>
           </Sidebar>
           <div className="flex flex-col flex-1 w-full min-w-0">
-             <AppHeader activeView={activeView} onSelectView={setActiveView} />
+             <AppHeader activeView={activeView} />
             <main className="flex-1 overflow-auto p-4">
               {renderView()}
             </main>

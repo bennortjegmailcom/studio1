@@ -100,15 +100,15 @@ export default function MeetingView() {
   }, [selectedBooking, data, dailyTotalsByResponsibility]);
 
   return (
-    <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+    <div className="grid lg:grid-cols-3 gap-4 h-full">
+        <Card className="lg:col-span-2 flex flex-col">
         <CardHeader>
             <CardTitle>Meeting Summary Timeline</CardTitle>
             <CardDescription>Hover for details, click for an expanded report.</CardDescription>
         </CardHeader>
         <TooltipProvider delayDuration={100}>
-            <ScrollArea className="h-[calc(100vh-280px)]">
-            <CardContent>
+            <ScrollArea className="flex-grow">
+            <CardContent className="h-full">
                 <div className="space-y-4">
                 {data.equipment.map(eq => (
                     <div key={eq.id}>
@@ -121,6 +121,7 @@ export default function MeetingView() {
                             const width = ((booking.endTime - booking.startTime) / (24 * 60)) * 100;
                             const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
                             const system = data.systems.find(s => s.id === booking.systemId);
+                            const fault = data.faults.find(f => f.id === booking.faultId);
                             const duration = booking.endTime - booking.startTime;
                             
                             return (
@@ -140,6 +141,7 @@ export default function MeetingView() {
                                         <p><strong>Duration:</strong> {formatDuration(duration)}</p>
                                         <p><strong>Responsibility:</strong> {responsibility?.name || 'N/A'}</p>
                                         <p><strong>System:</strong> {system?.name || 'N/A'}</p>
+                                        <p><strong>Fault:</strong> {fault?.name || 'N/A'}</p>
                                         <p><strong>Comments:</strong> {booking.comments ? `"${booking.comments}"` : 'None'}</p>
                                     </TooltipContent>
                                 </Tooltip>
@@ -150,7 +152,6 @@ export default function MeetingView() {
                 ))}
                 </div>
             </CardContent>
-            <ScrollBar orientation="vertical" />
             </ScrollArea>
         </TooltipProvider>
         <CardFooter>
@@ -161,12 +162,12 @@ export default function MeetingView() {
         </CardFooter>
         </Card>
         
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader>
                 <CardTitle>Downtime Report</CardTitle>
                 <CardDescription>Details for the selected event.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-grow">
             {selectedBooking && selectedBookingDetails ? (
                 <div className="space-y-4">
                     <div className="flex justify-between items-start">

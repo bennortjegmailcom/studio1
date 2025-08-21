@@ -21,8 +21,6 @@ import {
 } from "@/components/ui/alert-dialog"
 
 const TIME_INCREMENT = 5; // minutes
-const TOTAL_MINUTES = 24 * 60;
-const NUM_COLUMNS = TOTAL_MINUTES / TIME_INCREMENT;
 
 const formatTime = (minutes: number) => {
   const h = Math.floor(minutes / 60).toString().padStart(2, '0');
@@ -37,10 +35,15 @@ const formatDuration = (minutes: number) => {
     return `${h}h ${m > 0 ? `${m}min` : ''}`;
 }
 
+const viewConfig = {
+    '24h': { start: 0, end: 24 * 60, hours: 24, labelEvery: 1 },
+    'day': { start: 6 * 60, end: 18 * 60, hours: 12, labelEvery: 1 },
+    'night': { start: 18 * 60, end: 6 * 60, hours: 12, labelEvery: 1 }
+};
+
 export default function TrackerView() {
   const context = useContext(AppContext);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [selectionBox, setSelectionBox] = useState<React.CSSProperties>({});
@@ -54,27 +57,73 @@ export default function TrackerView() {
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
 
-  const [columnWidth, setColumnWidth] = useState(4);
+  if (!context) return <div>Loading...</div>;
+  const { data, today, deleteBooking, trackerVewType } = context;
+
+  const currentView = viewConfig[trackerVewType];
+  const totalMinutes = trackerVewType === 'night' ? 12 * 60 : currentView.end - currentView.start;
+  const numColumns = totalMinutes / TIME_INCREMENT;
+
+  const [columnWidth, setColumnWidth] = useState(0);
 
   useEffect(() => {
     const calculateColumnWidth = () => {
       if (timelineRef.current) {
-        setColumnWidth(timelineRef.current.scrollWidth / NUM_COLUMNS);
+        setColumnWidth(timelineRef.current.clientWidth / numColumns);
       }
     };
 
     calculateColumnWidth();
-    window.addEventListener('resize', calculateColumnWidth);
-    return () => window.removeEventListener('resize', calculateColumnWidth);
-  }, []);
+    const resizeObserver = new ResizeObserver(calculateColumnWidth);
+    if(timelineRef.current) resizeObserver.observe(timelineRef.current);
+    
+    return () => resizeObserver.disconnect();
+  }, [numColumns]);
 
 
-  if (!context) return <div>Loading...</div>;
-  const { data, today, deleteBooking } = context;
+  const getPositionAndWidth = (booking: Booking) => {
+    const bookingStart = booking.startTime;
+    const bookingEnd = booking.endTime;
+
+    let startPos = -1, endPos = -1;
+
+    if (trackerVewType === 'night') {
+        const nightDuration = 12 * 60;
+        let effectiveStart = -1;
+        if(bookingStart >= 18*60) effectiveStart = bookingStart - 18*60;
+        else if(bookingStart < 6*60) effectiveStart = bookingStart + 6*60;
+        
+        let effectiveEnd = -1;
+        if(bookingEnd > 18*60) effectiveEnd = bookingEnd - 18*60;
+        else if(bookingEnd <= 6*60) effectiveEnd = bookingEnd + 6*60;
+        else if (bookingEnd > 6*60 && bookingStart >= 18*60) effectiveEnd = nightDuration;
+
+
+        if(effectiveStart !== -1 && effectiveEnd !== -1 && effectiveEnd > effectiveStart){
+            startPos = effectiveStart / nightDuration;
+            endPos = effectiveEnd / nightDuration;
+        }
+
+    } else {
+       if (bookingStart < currentView.end && bookingEnd > currentView.start) {
+           const clampedStart = Math.max(bookingStart, currentView.start);
+           const clampedEnd = Math.min(bookingEnd, currentView.end);
+           startPos = (clampedStart - currentView.start) / totalMinutes;
+           endPos = (clampedEnd - currentView.start) / totalMinutes;
+       }
+    }
+
+    if(startPos === -1 || endPos === -1 || endPos < startPos) return null;
+
+    return {
+        left: startPos * 100,
+        width: (endPos - startPos) * 100,
+    };
+  }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    const rect = timelineRef.current!.getBoundingClientRect();
+    if (e.button !== 0 || !timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
@@ -86,7 +135,14 @@ export default function TrackerView() {
     if (!equipment) return;
 
     const colIndex = Math.floor(x / columnWidth);
-    const startTime = colIndex * TIME_INCREMENT;
+    
+    let startTime;
+    if (trackerVewType === 'night') {
+        const minutesIntoShift = colIndex * TIME_INCREMENT;
+        startTime = (18 * 60 + minutesIntoShift) % (24 * 60);
+    } else {
+        startTime = currentView.start + (colIndex * TIME_INCREMENT);
+    }
 
     setSelection({ equipmentId: equipment.id, startTime, endTime: startTime + TIME_INCREMENT });
     setSelectionBox({
@@ -108,8 +164,16 @@ export default function TrackerView() {
 
     // Hover Tooltip Logic
     const colIndex = Math.floor(currentX / columnWidth);
-    const timeInMinutes = colIndex * TIME_INCREMENT;
-    if (timeInMinutes >= 0 && timeInMinutes < TOTAL_MINUTES) {
+    
+    let timeInMinutes;
+     if (trackerVewType === 'night') {
+        const minutesIntoShift = colIndex * TIME_INCREMENT;
+        timeInMinutes = (18 * 60 + minutesIntoShift) % (24 * 60);
+    } else {
+        timeInMinutes = currentView.start + colIndex * TIME_INCREMENT;
+    }
+
+    if (timeInMinutes >= 0 && timeInMinutes < 24 * 60) {
         setHoverTooltip({
             visible: true,
             x: currentX,
@@ -131,14 +195,27 @@ export default function TrackerView() {
 
     setSelectionBox(prev => ({ ...prev, left, width }));
     
-    const newStartTime = Math.min(startCol, currentCol) * TIME_INCREMENT;
-    const newEndTime = (Math.max(startCol, currentCol) + 1) * TIME_INCREMENT;
+    const minCol = Math.min(startCol, currentCol);
+    const maxCol = Math.max(startCol, currentCol);
+
+    let newStartTime, newEndTime;
+
+    if (trackerVewType === 'night') {
+        const startMinutesIntoShift = minCol * TIME_INCREMENT;
+        newStartTime = (18 * 60 + startMinutesIntoShift) % (24 * 60);
+        const endMinutesIntoShift = (maxCol + 1) * TIME_INCREMENT;
+        newEndTime = (18 * 60 + endMinutesIntoShift) % (24 * 60);
+    } else {
+        newStartTime = currentView.start + minCol * TIME_INCREMENT;
+        newEndTime = currentView.start + (maxCol + 1) * TIME_INCREMENT;
+    }
+
 
     setSelection(prev => prev ? { ...prev, startTime: newStartTime, endTime: newEndTime } : null);
   };
 
   const handleMouseUp = () => {
-    if (isSelecting && selection && selection.endTime > selection.startTime) {
+    if (isSelecting && selection && selection.endTime !== selection.startTime) {
       setModalOpen(true);
     }
     setIsSelecting(false);
@@ -177,17 +254,33 @@ export default function TrackerView() {
 
   const bookingsToday = data.bookings.filter(b => b.date === today);
 
+  const timeLabels = useMemo(() => {
+    const labels = [];
+    if(trackerVewType === 'night') {
+        for (let i = 0; i < 6; i++) labels.push(`${18 + i}:00`);
+        labels.push("00:00");
+        for (let i = 1; i < 6; i++) labels.push(`0${i}:00`);
+    } else {
+        for (let i = 0; i < currentView.hours; i++) {
+            if (i % currentView.labelEvery === 0) {
+                 labels.push(`${(currentView.start / 60 + i).toString().padStart(2, '0')}:00`);
+            }
+        }
+    }
+    return labels;
+  }, [trackerVewType, currentView]);
+
+
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>Equipment Timeline</CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto pt-8" ref={containerRef}>
-        <div className="relative" style={{ minWidth: '1200px' }}>
+      <CardContent className="flex-grow overflow-x-auto pt-8 relative">
           
           {/* Selection Info Box */}
           {isSelecting && selection && (
-            <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono whitespace-nowrap">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono whitespace-nowrap">
                 <span className="text-primary font-semibold">Selection:</span>
                 <span className="ml-2">{formatTime(selection.startTime)}</span>
                 <span className="mx-2">-</span>
@@ -196,12 +289,12 @@ export default function TrackerView() {
             </div>
           )}
 
-          <div className="grid" style={{ gridTemplateColumns: '150px 1fr' }}>
+          <div className="grid min-h-full" style={{ gridTemplateColumns: '150px 1fr' }}>
             {/* Header: Equipment Names */}
             <div className="sticky left-0 z-20 font-semibold bg-card border-r border-b">Equipment</div>
-            <div className="relative grid border-b" style={{ gridTemplateColumns: `repeat(${24}, minmax(0, 1fr))` }}>
-              {Array.from({ length: 24 }).map((_, i) => (
-                <div key={i} className="text-center p-2 border-r text-sm text-muted-foreground">{`${i.toString().padStart(2, '0')}:00`}</div>
+            <div className="relative grid border-b" style={{ gridTemplateColumns: `repeat(${timeLabels.length}, minmax(0, 1fr))` }}>
+              {timeLabels.map((label) => (
+                <div key={label} className="text-center p-2 border-r text-sm text-muted-foreground">{label}</div>
               ))}
             </div>
             {/* Body: Timeline Grid */}
@@ -229,14 +322,14 @@ export default function TrackerView() {
                     <div className="bg-foreground text-background text-xs font-mono px-2 py-1 rounded-md -translate-x-1/2 -translate-y-[calc(100%+4px)]">
                         {hoverTooltip.time}
                     </div>
-                    <div className="w-px h-screen bg-foreground/50 -translate-y-[calc(100%+4px)]"></div>
+                    <div className="w-px h-full bg-foreground/50 -translate-y-full"></div>
                 </div>
               )}
 
               {data.equipment.map((eq, rowIndex) => (
-                <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${NUM_COLUMNS}, minmax(0, 1fr))` }}>
-                  {Array.from({ length: NUM_COLUMNS }).map((_, colIndex) => (
-                     <div key={colIndex} className={cn("h-full", colIndex % 12 === 0 ? "border-l" : colIndex % 6 === 0 ? "border-l border-dashed" : "")}></div>
+                <div key={eq.id} className="relative h-[50px] border-b grid" style={{ gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))` }}>
+                  {Array.from({ length: numColumns }).map((_, colIndex) => (
+                     <div key={colIndex} className={cn("h-full", colIndex % (60 / TIME_INCREMENT) === 0 ? "border-l" : colIndex % (30 / TIME_INCREMENT) === 0 ? "border-l border-dashed" : "")}></div>
                   ))}
                 </div>
               ))}
@@ -247,9 +340,10 @@ export default function TrackerView() {
               {bookingsToday.map((booking) => {
                  const rowIndex = data.equipment.findIndex(e => e.id === booking.equipmentId);
                  if (rowIndex === -1) return null;
+                 
+                 const pos = getPositionAndWidth(booking);
+                 if (!pos) return null;
 
-                 const left = (booking.startTime / TOTAL_MINUTES) * 100;
-                 const width = ((booking.endTime - booking.startTime) / TOTAL_MINUTES) * 100;
                  const responsibility = data.responsibilities.find(r => r.id === booking.responsibilityId);
                  const system = data.systems.find(s => s.id === booking.systemId);
                  const fault = data.faults.find(s => s.id === booking.faultId);
@@ -260,8 +354,8 @@ export default function TrackerView() {
                      className="absolute h-[42px] rounded-md px-2 py-1 flex items-center justify-between text-white shadow-lg group"
                      style={{
                        top: `${rowIndex * 50 + 4}px`,
-                       left: `${left}%`,
-                       width: `${width}%`,
+                       left: `${pos.left}%`,
+                       width: `${pos.width}%`,
                        backgroundColor: responsibility?.color || 'gray',
                        minWidth: '100px',
                      }}
@@ -283,10 +377,8 @@ export default function TrackerView() {
                    </div>
                  );
               })}
-
             </div>
           </div>
-        </div>
         {modalOpen && (
           <BookingModal
             isOpen={modalOpen}
@@ -305,7 +397,7 @@ export default function TrackerView() {
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the booking.
-                </AlertDialogDescription>
+                </Description>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
