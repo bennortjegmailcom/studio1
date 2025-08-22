@@ -23,7 +23,7 @@ const formatDuration = (minutes: number) => {
   }
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}h ${mins}min`;
+  return `${hours}h ${mins > 0 ? `${mins}min` : ''}`;
 }
 
 export default function MeetingView() {
@@ -73,7 +73,7 @@ export default function MeetingView() {
                 const fault = data.faults.find(f => f.id === b.faultId)?.name || 'N/A';
                 const duration = b.endTime - b.startTime;
                 
-                textContent += `Time: ${formatTime(b.startTime)} - ${formatTime(b.endTime)} (${duration} mins)\n`;
+                textContent += `Time: ${formatTime(b.startTime)} - ${formatTime(b.endTime)} (${formatDuration(duration)})\n`;
                 textContent += `System: ${system}\n`;
                 textContent += `Responsibility: ${responsibility}\n`;
                 textContent += `Fault: ${fault}\n`;

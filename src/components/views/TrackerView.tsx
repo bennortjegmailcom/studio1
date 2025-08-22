@@ -27,9 +27,10 @@ const formatTime = (minutes: number) => {
 };
 
 const formatDuration = (minutes: number) => {
-    if (minutes < 60) return `${minutes} min`;
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
+    const totalMinutes = (minutes + 24*60) % (24*60);
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
     return `${h}h ${m > 0 ? `${m}min` : ''}`;
 }
 
@@ -60,19 +61,10 @@ export default function TrackerView() {
   const { data, today, deleteBooking, trackerVewType } = context;
 
   const currentView = viewConfig[trackerVewType];
-  const totalMinutes = trackerVewType === 'night' ? 12 * 60 : currentView.end - currentView.start;
+  const totalMinutes = currentView.end - currentView.start;
   const numColumns = totalMinutes / TIME_INCREMENT;
 
   const [columnWidth, setColumnWidth] = useState(0);
-  
-  const areasWithEquipment = useMemo(() => {
-    return data.areas.map(area => ({
-        ...area,
-        equipment: data.relations.areaToEquipment?.[area.id]?.map(eqId => 
-            data.equipment.find(eq => eq.id === eqId)
-        ).filter((eq): eq is NonNullable<typeof eq> => eq != null) || []
-    }));
-  }, [data.areas, data.equipment, data.relations.areaToEquipment]);
 
   const totalEquipmentSlots = useMemo(() => {
     return data.areas.length;
@@ -95,7 +87,7 @@ export default function TrackerView() {
 
 
   const getPositionAndWidth = (booking: Booking) => {
-    // Adjust booking times for the next day if they cross midnight and the view is 24h
+    // Adjust booking times for the next day if they cross midnight
     const date = new Date(booking.date);
     const todayDate = new Date(today);
     const dayDiff = (date.getTime() - todayDate.getTime()) / (1000 * 3600 * 24);
@@ -105,31 +97,12 @@ export default function TrackerView() {
 
     let startPos = -1, endPos = -1;
 
-    if (trackerVewType === 'night') {
-        const nightDuration = 12 * 60;
-        
-        // Normalize booking times to a single 24-hour cycle starting from the beginning of `today`
-        const normalizedStart = booking.startTime + (dayDiff * 24 * 60);
-        const normalizedEnd = booking.endTime + (dayDiff * 24 * 60);
-
-        // Define night shift boundaries in the same normalized coordinate system
-        const shiftStart = 18 * 60; // 18:00 today
-        const shiftEnd = (6 * 60) + (24 * 60); // 06:00 tomorrow
-
-        const clampedStart = Math.max(normalizedStart, shiftStart);
-        const clampedEnd = Math.min(normalizedEnd, shiftEnd);
-
-        if (clampedEnd > clampedStart) {
-            startPos = (clampedStart - shiftStart) / nightDuration;
-            endPos = (clampedEnd - shiftStart) / nightDuration;
-        }
-    } else {
-       if (bookingStart < currentView.end && bookingEnd > currentView.start) {
-           const clampedStart = Math.max(bookingStart, currentView.start);
-           const clampedEnd = Math.min(bookingEnd, currentView.end);
-           startPos = (clampedStart - currentView.start) / totalMinutes;
-           endPos = (clampedEnd - currentView.start) / totalMinutes;
-       }
+    // Check if the booking overlaps with the current view
+    if (bookingStart < currentView.end && bookingEnd > currentView.start) {
+        const clampedStart = Math.max(bookingStart, currentView.start);
+        const clampedEnd = Math.min(bookingEnd, currentView.end);
+        startPos = (clampedStart - currentView.start) / totalMinutes;
+        endPos = (clampedEnd - currentView.start) / totalMinutes;
     }
 
     if(startPos === -1 || endPos === -1 || endPos <= startPos) return null;
@@ -157,18 +130,12 @@ export default function TrackerView() {
 
     const colIndex = Math.floor(x / columnWidth);
     
-    let startTime;
-    if (trackerVewType === 'night') {
-        const minutesIntoShift = colIndex * TIME_INCREMENT;
-        startTime = (18 * 60 + minutesIntoShift) % (24 * 60);
-    } else {
-        startTime = currentView.start + (colIndex * TIME_INCREMENT);
-    }
+    const startTime = currentView.start + (colIndex * TIME_INCREMENT);
 
     const rowIndex = findRowIndexByY(y);
     const topPos = rowIndex * 50;
 
-    setSelection({ areaId: area.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24 * 60) });
+    setSelection({ areaId: area.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24*60) });
     setSelectionBox({
       position: 'absolute',
       left: colIndex * columnWidth,
@@ -203,16 +170,9 @@ export default function TrackerView() {
 
     // Hover Tooltip Logic
     const colIndex = Math.floor(currentX / columnWidth);
+    const timeInMinutes = currentView.start + colIndex * TIME_INCREMENT;
     
-    let timeInMinutes;
-     if (trackerVewType === 'night') {
-        const minutesIntoShift = colIndex * TIME_INCREMENT;
-        timeInMinutes = (18 * 60 + minutesIntoShift);
-    } else {
-        timeInMinutes = currentView.start + colIndex * TIME_INCREMENT;
-    }
-
-    if (timeInMinutes >= 0) {
+    if (timeInMinutes >= currentView.start && timeInMinutes < currentView.end) {
         setHoverTooltip({
             visible: true,
             x: currentX,
@@ -237,20 +197,10 @@ export default function TrackerView() {
     const minCol = Math.min(startCol, currentCol);
     const maxCol = Math.max(startCol, currentCol);
 
-    let newStartTime, newEndTime;
+    const newStartTime = currentView.start + minCol * TIME_INCREMENT;
+    const newEndTime = currentView.start + (maxCol + 1) * TIME_INCREMENT;
 
-    if (trackerVewType === 'night') {
-        const startMinutesIntoShift = minCol * TIME_INCREMENT;
-        newStartTime = (18 * 60 + startMinutesIntoShift) % (24 * 60);
-        const endMinutesIntoShift = (maxCol + 1) * TIME_INCREMENT;
-        newEndTime = (18 * 60 + endMinutesIntoShift) % (24 * 60);
-    } else {
-        newStartTime = currentView.start + minCol * TIME_INCREMENT;
-        newEndTime = currentView.start + (maxCol + 1) * TIME_INCREMENT;
-    }
-
-
-    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24 * 60) } : null);
+    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24*60) } : null);
   };
 
   const handleMouseUp = () => {
@@ -302,28 +252,21 @@ export default function TrackerView() {
     tomorrowDate.setDate(todayDate.getDate() + 1);
     const tomorrowString = tomorrowDate.toISOString().split('T')[0];
     
-    return data.bookings.filter(b => b.date === today || ((trackerVewType === '24h' || trackerVewType === 'night') && b.date === tomorrowString));
-  }, [data.bookings, today, trackerVewType]);
+    return data.bookings.filter(b => b.date === today || (b.date === tomorrowString));
+  }, [data.bookings, today]);
 
 
   const timeLabels = useMemo(() => {
     const labels = [];
-    if(trackerVewType === 'night') {
-        // Night shift from 18:00 to 06:00
-        for (let i = 0; i < 12; i++) {
-           const hour = (18 + i) % 24;
-           labels.push(`${hour.toString().padStart(2, '0')}:00`);
-        }
-    } else {
-        for (let i = 0; i < currentView.hours; i++) {
-            if (i % currentView.labelEvery === 0) {
-                 const hour = (currentView.start / 60 + i) % 24;
-                 labels.push(`${hour.toString().padStart(2, '0')}:00`);
-            }
+    const hoursInView = (currentView.end - currentView.start) / 60;
+    for (let i = 0; i < hoursInView; i++) {
+        if (i % currentView.labelEvery === 0) {
+             const hour = (currentView.start / 60 + i) % 24;
+             labels.push(`${hour.toString().padStart(2, '0')}:00`);
         }
     }
     return labels;
-  }, [trackerVewType, currentView]);
+  }, [currentView]);
 
   return (
     <Card className="h-full flex flex-col">
@@ -339,7 +282,7 @@ export default function TrackerView() {
                 <span className="ml-2">{formatTime(selection.startTime)}</span>
                 <span className="mx-2">-</span>
                 <span>{formatTime(selection.endTime)}</span>
-                <span className="ml-4 font-sans text-muted-foreground">({formatDuration((selection.endTime - selection.startTime + 24*60) % (24*60) )})</span>
+                <span className="ml-4 font-sans text-muted-foreground">({formatDuration(selection.endTime - selection.startTime)})</span>
             </div>
           )}
 
@@ -409,13 +352,12 @@ export default function TrackerView() {
                      key={booking.id}
                      data-booking-id={booking.id}
                      onClick={() => handleEdit(booking)}
-                     className="absolute h-[42px] rounded-md px-2 py-1 flex flex-col items-start justify-center text-white shadow-lg group cursor-pointer"
+                     className="absolute h-[42px] rounded-md px-2 py-1 flex flex-col items-start justify-center text-white shadow-lg group cursor-pointer overflow-hidden"
                      style={{
                        top: `${rowIndex * 50 + 4}px`,
                        left: `${pos.left}%`,
                        width: `${pos.width}%`,
                        backgroundColor: responsibility?.color || 'gray',
-                       minWidth: '120px',
                      }}
                    >
                      <div className="truncate text-xs font-bold leading-tight">
