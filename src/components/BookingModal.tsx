@@ -200,7 +200,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-sm md:max-w-md">
         <DialogHeader>
           <DialogTitle>{booking ? 'Edit' : 'Create'} Booking</DialogTitle>
           <DialogDescription>
