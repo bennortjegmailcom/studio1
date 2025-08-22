@@ -114,6 +114,13 @@ export default function ClientPage() {
     }));
   }, [setData]);
 
+  const clearBookingsForDay = useCallback((date: string) => {
+    setData(prevData => ({
+        ...prevData,
+        bookings: prevData.bookings.filter(b => b.date !== date),
+    }));
+  }, [setData]);
+
 
   const appContextValue = {
     data,
@@ -121,6 +128,7 @@ export default function ClientPage() {
     addBooking,
     updateBooking,
     deleteBooking,
+    clearBookingsForDay,
     today,
     setToday,
     trackerVewType,

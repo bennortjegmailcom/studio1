@@ -9,6 +9,7 @@ interface AppContextType {
   addBooking: (booking: Omit<Booking, 'id' | 'date' | 'startTime' | 'endTime'>, selection: Selection) => void;
   updateBooking: (booking: Booking) => void;
   deleteBooking: (bookingId: string) => void;
+  clearBookingsForDay: (date: string) => void;
   today: string;
   setToday: Dispatch<SetStateAction<string>>;
   trackerVewType: TrackerViewType;

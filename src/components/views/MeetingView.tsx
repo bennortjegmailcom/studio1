@@ -6,10 +6,21 @@ import type { Booking } from '@/lib/types';
 import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, X } from 'lucide-react';
+import { Download, X, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const formatTime = (minutes: number) => {
   const h = Math.floor(minutes / 60).toString().padStart(2, '0');
@@ -31,7 +42,7 @@ export default function MeetingView() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   if (!context) return <div>Loading...</div>;
 
-  const { data, today } = context;
+  const { data, today, clearBookingsForDay } = context;
   const bookingsToday = data.bookings.filter(b => b.date === today);
 
   const dailyTotalsByResponsibility = useMemo(() => {
@@ -112,6 +123,11 @@ export default function MeetingView() {
     };
   }, [selectedBooking, data, dailyTotalsByResponsibility]);
 
+  const handleClearAll = () => {
+    clearBookingsForDay(today);
+    setSelectedBooking(null);
+  };
+
   return (
     <div className="grid lg:grid-cols-3 gap-4 h-full">
         <Card className="lg:col-span-2 flex flex-col">
@@ -177,11 +193,31 @@ export default function MeetingView() {
             </CardContent>
             </ScrollArea>
         </TooltipProvider>
-        <CardFooter>
+        <CardFooter className="flex justify-between">
             <Button onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" />
-            Export as .txt
+                <Download className="mr-2 h-4 w-4" />
+                Export as .txt
             </Button>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={bookingsToday.length === 0}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear All Bookings for Today
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete all {bookingsToday.length} bookings for {today}.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearAll}>Continue</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </CardFooter>
         </Card>
         
