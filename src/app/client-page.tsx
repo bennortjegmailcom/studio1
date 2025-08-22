@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useCallback } from 'react';
@@ -145,7 +146,7 @@ export default function ClientPage() {
     <AppContext.Provider value={appContextValue}>
       <div className="flex h-screen w-full bg-background">
         <SidebarProvider>
-          <Sidebar>
+          <Sidebar collapsible="icon">
             <SidebarHeader>
               <div className="flex items-center gap-2 p-2">
                 <GanttChartSquare className="w-6 h-6 text-primary" />
