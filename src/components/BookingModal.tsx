@@ -316,7 +316,7 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
                 <FormItem>
                   <FormLabel>Comments</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Add any comments..." {...field} />
+                    <Textarea placeholder="Add any comments..." {...field} rows={2} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
