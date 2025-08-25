@@ -1,10 +1,9 @@
 
 "use client";
 
-import React, { useState, useCallback } from 'react';
-import useLocalStorage from '@/hooks/useLocalStorage';
-import { initialData } from '@/data/initialData';
-import type { AppData, Booking, Selection } from '@/lib/types';
+import React from 'react';
+import useFirestoreData from '@/hooks/useFirestoreData';
+import type { Booking, Selection } from '@/lib/types';
 import { AppContext } from '@/contexts/AppContext';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import TrackerView from '@/components/views/TrackerView';
@@ -12,7 +11,7 @@ import MeetingView from '@/components/views/MeetingView';
 import AutoBookerView from '@/components/views/AutoBookerView';
 import AdminView from '@/components/views/AdminView';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, GanttChartSquare, Users, Bot, Settings, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { Calendar as CalendarIcon, GanttChartSquare, Users, Bot, Settings, ChevronLeft, ChevronRight, Menu, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, addDays, subDays } from 'date-fns';
@@ -82,50 +81,35 @@ function AppHeader({ activeView }: { activeView: View }) {
 }
 
 export default function ClientPage() {
-  const [data, setData] = useLocalStorage<AppData>('equip-track-ai-data', initialData);
-  const [activeView, setActiveView] = useState<View>('tracker');
-  const [today, setToday] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [trackerVewType, setTrackerViewType] = useState<TrackerViewType>('24h');
+  const { 
+    data, 
+    setData, 
+    loading,
+    addBooking,
+    updateBooking,
+    deleteBooking,
+    clearBookingsForDay,
+  } = useFirestoreData();
+  
+  const [activeView, setActiveView] = React.useState<View>('tracker');
+  const [today, setToday] = React.useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [trackerVewType, setTrackerViewType] = React.useState<TrackerViewType>('24h');
 
-  const addBooking = useCallback((bookingData: Omit<Booking, 'id' | 'date'>, selection: Selection) => {
-    setData(prevData => {
-      const newBooking: Booking = {
+  const addBookingCallback = React.useCallback((bookingData: Omit<Booking, 'id' | 'date'>, selection: Selection) => {
+    const newBooking: Omit<Booking, 'id'> = {
         ...bookingData,
-        id: `booking-${Date.now()}`,
         date: today,
         startTime: selection.startTime,
         endTime: selection.endTime,
       };
-      return { ...prevData, bookings: [...prevData.bookings, newBooking] };
-    });
-  }, [setData, today]);
-
-  const updateBooking = useCallback((updatedBooking: Booking) => {
-    setData(prevData => ({
-      ...prevData,
-      bookings: prevData.bookings.map(b => b.id === updatedBooking.id ? updatedBooking : b),
-    }));
-  }, [setData]);
-  
-  const deleteBooking = useCallback((bookingId: string) => {
-    setData(prevData => ({
-      ...prevData,
-      bookings: prevData.bookings.filter(b => b.id !== bookingId),
-    }));
-  }, [setData]);
-
-  const clearBookingsForDay = useCallback((date: string) => {
-    setData(prevData => ({
-        ...prevData,
-        bookings: prevData.bookings.filter(b => b.date !== date),
-    }));
-  }, [setData]);
+    addBooking(newBooking);
+  }, [addBooking, today]);
 
 
   const appContextValue = {
     data,
     setData,
-    addBooking,
+    addBooking: addBookingCallback,
     updateBooking,
     deleteBooking,
     clearBookingsForDay,
@@ -149,6 +133,17 @@ export default function ClientPage() {
         return <TrackerView />;
     }
   };
+  
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <p>Connecting to database...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <AppContext.Provider value={appContextValue}>
