@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
@@ -40,9 +39,8 @@ const viewConfig = {
     'night': { start: 18 * 60, end: 30 * 60, hours: 12, labelEvery: 1 } // Wraps around midnight
 };
 
-
-export default function TrackerView() {
-  const context = useContext(AppContext);
+function TrackerViewContent() {
+  const context = useContext(AppContext)!;
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -57,7 +55,6 @@ export default function TrackerView() {
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
 
-  if (!context) return <div>Loading...</div>;
   const { data, today, deleteBooking, trackerVewType } = context;
 
   const currentView = viewConfig[trackerVewType];
@@ -401,4 +398,10 @@ export default function TrackerView() {
       </CardContent>
     </Card>
   );
+}
+
+export default function TrackerView() {
+    const context = useContext(AppContext);
+    if (!context) return <div>Loading...</div>;
+    return <TrackerViewContent />;
 }

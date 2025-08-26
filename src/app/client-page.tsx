@@ -95,7 +95,7 @@ export default function ClientPage() {
   const [today, setToday] = React.useState<string>(() => new Date().toISOString().split('T')[0]);
   const [trackerVewType, setTrackerViewType] = React.useState<TrackerViewType>('24h');
 
-  const addBookingCallback = React.useCallback((bookingData: Omit<Booking, 'id' | 'date'>, selection: Selection) => {
+  const addBookingCallback = React.useCallback((bookingData: Omit<Booking, 'id' | 'date' | 'startTime' | 'endTime'>, selection: Selection) => {
     const newBooking: Omit<Booking, 'id'> = {
         ...bookingData,
         date: today,

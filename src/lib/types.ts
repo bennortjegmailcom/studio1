@@ -35,7 +35,7 @@ export interface Booking {
   systemId: string;
   responsibilityId: string;
   faultId: string;
-  comments: string;
+  comments?: string;
   date: string; // "YYYY-MM-DD"
 }
 

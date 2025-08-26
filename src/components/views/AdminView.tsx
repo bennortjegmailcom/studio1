@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useContext, useState, useEffect, useMemo } from 'react';
@@ -26,24 +25,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 
 
 function DataManagementTab() {
-  const context = useContext(AppContext);
-  if (!context) return null;
-  const { data, setData } = context;
+  const { data, setData } = useContext(AppContext)!;
 
   // Generic CRUD functions
   const handleAddItem = <T extends { id: string, name: string }>(type: keyof AppData, newItem: Omit<T, 'id'>) => {
-    setData(prev => {
-        const items = prev[type] as T[] || [];
-        const fullItem = { ...newItem, id: `${type.toString().slice(0, 4)}-${Date.now()}` } as T;
-        return {...prev, [type]: [...items, fullItem]}
-    });
+    const items = data[type] as T[] || [];
+    const fullItem = { ...newItem, id: `${type.toString().slice(0, 4)}-${Date.now()}` } as T;
+    setData({...data, [type]: [...items, fullItem]});
   };
 
   const handleDeleteItem = (type: keyof AppData, id: string) => {
-    setData(prev => {
-        const items = prev[type] as {id: string}[] || [];
-        return {...prev, [type]: items.filter(item => item.id !== id)}
-    });
+    const items = data[type] as {id: string}[] || [];
+    setData({...data, [type]: items.filter(item => item.id !== id)});
   };
   
   const dataCategories = [
@@ -128,9 +121,7 @@ function DataManagementTab() {
 }
 
 function RelationsViewer() {
-    const context = useContext(AppContext);
-    if (!context) return null;
-    const { data } = context;
+    const { data } = useContext(AppContext)!;
   
     const getName = (collection: any[], id: string) => collection.find(item => item.id === id)?.name || 'Unknown';
   
@@ -214,11 +205,8 @@ function RelationsViewer() {
 
 
 function RelationsManagementTab() {
-  const context = useContext(AppContext);
   const { toast } = useToast();
-  if (!context) return null;
-
-  const { data, setData } = context;
+  const { data, setData } = useContext(AppContext)!;
   const [relationType, setRelationType] = useState('areaToEquipment');
   
   // State for Area -> Equipment
@@ -272,39 +260,33 @@ function RelationsManagementTab() {
 
   const handleSaveAreaToEquipment = () => {
     if (!selectedArea) return;
-    setData(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev.relations));
-        newRelations.areaToEquipment[selectedArea] = selectedEquipmentForArea;
-        return {...prev, relations: newRelations };
-    });
+    const newRelations = JSON.parse(JSON.stringify(data.relations));
+    newRelations.areaToEquipment[selectedArea] = selectedEquipmentForArea;
+    setData({...data, relations: newRelations });
     toast({ title: "Success", description: "Area to Equipment relation saved." });
   }
 
   const handleSaveEquipmentToSystems = () => {
     if (selectedEquipmentForSystem.length === 0) return;
-    setData(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev.relations));
-        selectedEquipmentForSystem.forEach(eqId => {
-            newRelations.equipmentToSystem[eqId] = selectedSystems;
-        });
-        return {...prev, relations: newRelations};
+    const newRelations = JSON.parse(JSON.stringify(data.relations));
+    selectedEquipmentForSystem.forEach(eqId => {
+        newRelations.equipmentToSystem[eqId] = selectedSystems;
     });
-     toast({ title: "Success", description: "Equipment to Systems relation saved." });
+    setData({...data, relations: newRelations});
+    toast({ title: "Success", description: "Equipment to Systems relation saved." });
   }
 
   const handleSaveSystemResponsibilityFaults = () => {
     if (!selectedSystemForFaults || !selectedResponsibility) return;
-    setData(prev => {
-        const newRelations = JSON.parse(JSON.stringify(prev.relations));
-        if (!newRelations.systemToResponsibilityToFaults) {
-            newRelations.systemToResponsibilityToFaults = {};
-        }
-        if (!newRelations.systemToResponsibilityToFaults[selectedSystemForFaults]) {
-            newRelations.systemToResponsibilityToFaults[selectedSystemForFaults] = {};
-        }
-        newRelations.systemToResponsibilityToFaults[selectedSystemForFaults][selectedResponsibility] = selectedFaults;
-        return {...prev, relations: newRelations};
-    });
+    const newRelations = JSON.parse(JSON.stringify(data.relations));
+    if (!newRelations.systemToResponsibilityToFaults) {
+        newRelations.systemToResponsibilityToFaults = {};
+    }
+    if (!newRelations.systemToResponsibilityToFaults[selectedSystemForFaults]) {
+        newRelations.systemToResponsibilityToFaults[selectedSystemForFaults] = {};
+    }
+    newRelations.systemToResponsibilityToFaults[selectedSystemForFaults][selectedResponsibility] = selectedFaults;
+    setData({...data, relations: newRelations});
     toast({ title: "Success", description: "System, Responsibility and Faults relation saved." });
   }
 
@@ -464,10 +446,8 @@ function RelationsManagementTab() {
 
 
 function ImportExportTab() {
-  const context = useContext(AppContext);
   const { toast } = useToast();
-  if (!context) return null;
-  const { data, setData } = context;
+  const { data, setData } = useContext(AppContext)!;
 
   const handleExport = () => {
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
@@ -523,6 +503,9 @@ function ImportExportTab() {
 }
 
 export default function AdminView() {
+  const context = useContext(AppContext);
+  if (!context) return null;
+
   return (
     <Tabs defaultValue="data" className="space-y-4">
       <TabsList>

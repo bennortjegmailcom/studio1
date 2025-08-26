@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useContext, useEffect, useMemo, useState } from 'react';
@@ -55,10 +54,9 @@ interface BookingModalProps {
   onDelete?: (bookingId: string) => void;
 }
 
-export default function BookingModal({ isOpen, onClose, selection, booking, onDelete }: BookingModalProps) {
-  const context = useContext(AppContext);
-  if (!context) return null;
-
+// All logic is moved to this inner component
+function BookingModalContent({ isOpen, onClose, selection, booking, onDelete }: BookingModalProps) {
+  const context = useContext(AppContext)!; // Assert non-null context
   const { data, addBooking, updateBooking } = context;
   const [timeRange, setTimeRange] = useState([0, 0]);
 
@@ -194,9 +192,6 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
 
   const selectedAreaName = useMemo(() => data.areas.find(a => a.id === selectedAreaId)?.name, [data.areas, selectedAreaId]);
   const selectedEquipmentName = useMemo(() => data.equipment.find(e => e.id === selectedEquipmentId)?.name, [data.equipment, selectedEquipmentId]);
-
-
-  if (!selection) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -341,4 +336,16 @@ export default function BookingModal({ isOpen, onClose, selection, booking, onDe
       </DialogContent>
     </Dialog>
   );
+}
+
+// The wrapper component is the default export
+export default function BookingModal(props: BookingModalProps) {
+  const context = useContext(AppContext);
+
+  // Perform checks before rendering the main component
+  if (!context || !props.selection) {
+    return null;
+  }
+
+  return <BookingModalContent {...props} />;
 }

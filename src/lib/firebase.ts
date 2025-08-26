@@ -4,13 +4,15 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAwIGg1kH7JgiBK4IFM0rKDk9c0tSc8zag",
+  authDomain: "phonic-cinema-304121.firebaseapp.com",
+  projectId: "phonic-cinema-304121",
+  storageBucket: "phonic-cinema-304121.appspot.com",
+  messagingSenderId: "1009296154659",
+  appId: "1:1009296154659:web:0a068541028039d7a09196",
+  measurementId: "G-D70JMWSZ62"
 };
 
 // Initialize Firebase

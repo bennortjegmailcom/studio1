@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useContext, useState, useMemo } from 'react';
@@ -37,10 +36,9 @@ const formatDuration = (minutes: number) => {
   return `${hours}h ${mins > 0 ? `${mins}min` : ''}`;
 }
 
-export default function MeetingView() {
-  const context = useContext(AppContext);
+function MeetingViewContent() {
+  const context = useContext(AppContext)!;
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  if (!context) return <div>Loading...</div>;
 
   const { data, today, clearBookingsForDay } = context;
   const bookingsToday = data.bookings.filter(b => b.date === today);
@@ -283,4 +281,12 @@ export default function MeetingView() {
         </Card>
     </div>
   );
+}
+
+
+export default function MeetingView() {
+  const context = useContext(AppContext);
+  if (!context) return <div>Loading...</div>;
+
+  return <MeetingViewContent />;
 }

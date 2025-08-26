@@ -1,7 +1,18 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
 
+# Specifies the Node.js version to use. App Hosting supports Node.js 18 and 20.
+runtime: nodejs20
+
+# The region to deploy the backend to.
+# See https://firebase.google.com/docs/app-hosting/locations for a list of supported regions.
+region: us-central1
+
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
-  maxInstances: 1
+  maxInstances: 10
+
+# App Hosting will automatically detect the Next.js framework and the Genkit flows.
+# The build and run commands are inferred automatically based on your package.json.
+# No 'scripts' overrides are needed for a standard setup.

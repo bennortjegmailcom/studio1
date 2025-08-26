@@ -5,7 +5,7 @@ import { createContext } from 'react';
 
 interface AppContextType {
   data: AppData;
-  setData: Dispatch<SetStateAction<AppData>>;
+  setData: (updatedData: AppData) => Promise<void>;
   addBooking: (booking: Omit<Booking, 'id' | 'date' | 'startTime' | 'endTime'>, selection: Selection) => void;
   updateBooking: (booking: Booking) => void;
   deleteBooking: (bookingId: string) => void;
