@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { AppData, Equipment, System, Fault, Responsibility, Relations, Area } from '@/lib/types';
-import { PlusCircle, Trash2, Download, Upload, Save, Eye } from 'lucide-react';
+import { PlusCircle, Trash2, Download, Upload, Save, Eye, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
   Select,
@@ -22,6 +22,58 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
+
+function ItemDialog({ item, category, onSave, children, getTypedItem }: { item?: any, category: any, onSave: (item: any) => void, children: React.ReactNode, getTypedItem: (formData: FormData, catKey: keyof AppData) => any }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const isEdit = !!item;
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const itemData = getTypedItem(formData, category.key);
+        if (itemData) {
+            if (isEdit) {
+                onSave({ ...item, ...itemData });
+            } else {
+                onSave(itemData);
+            }
+        }
+        setIsOpen(false);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>{children}</DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{isEdit ? `Edit ${category.title.slice(0, -1)}` : `Add New ${category.title.slice(0, -1)}`}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit}>
+                    <div className="grid gap-4 py-4">
+                        {category.fields.map((field: any) => (
+                            <div key={field.name} className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor={field.name} className="text-right">{field.label}</Label>
+                                <Input
+                                    id={field.name}
+                                    name={field.name}
+                                    type={field.type}
+                                    defaultValue={isEdit ? item[field.name] : (field.type === 'color' ? '#3F51B5' : '')}
+                                    className="col-span-3"
+                                    required={field.name === 'name'}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="secondary" onClick={() => setIsOpen(false)}>Cancel</Button>
+                        <Button type="submit">{isEdit ? 'Save Changes' : 'Save'}</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 
 function DataManagementTab() {
@@ -38,10 +90,16 @@ function DataManagementTab() {
     const items = data[type] as {id: string}[] || [];
     setData({...data, [type]: items.filter(item => item.id !== id)});
   };
+
+  const handleUpdateItem = <T extends { id: string }>(type: keyof AppData, updatedItem: T) => {
+    const items = data[type] as T[] || [];
+    const updatedItems = items.map(item => item.id === updatedItem.id ? updatedItem : item);
+    setData({ ...data, [type]: updatedItems });
+  };
   
   const dataCategories = [
     { key: 'areas' as const, title: 'Areas', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
-    { key: 'equipment' as const, title: 'Equipment', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'tags', label: 'Historian Tags (comma-separated)', type: 'text' }] },
+    { key: 'equipment' as const, title: 'Equipment', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'historianTags', label: 'Historian Tags', type: 'text' }] },
     { key: 'systems' as const, title: 'Systems', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
     { key: 'responsibilities' as const, title: 'Responsibilities', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'color', label: 'Color', type: 'color' }] },
     { key: 'faults' as const, title: 'Faults', fields: [{ name: 'name', label: 'Name', type: 'text' }] },
@@ -62,7 +120,7 @@ function DataManagementTab() {
     switch(catKey) {
         case 'areas': return { name } as Omit<Area, 'id'>;
         case 'equipment': 
-            const tags = formData.get('tags') as string;
+            const tags = formData.get('historianTags') as string;
             return { name, historianTags: tags ? tags.split(',').map(t => t.trim()) : [] } as Omit<Equipment, 'id'>;
         case 'systems': return { name } as Omit<System, 'id'>;
         case 'responsibilities':
@@ -83,36 +141,27 @@ function DataManagementTab() {
               {(data[cat.key] as any[] || []).map(item => (
                 <div key={item.id} className="flex items-center justify-between p-2 mb-2 bg-secondary rounded-md">
                   {renderItem(item, cat.key)}
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(cat.key, item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <div className="flex items-center">
+                    <ItemDialog
+                      item={item}
+                      category={cat}
+                      onSave={(updatedItem) => handleUpdateItem(cat.key, updatedItem)}
+                      getTypedItem={getTypedItem}
+                    >
+                      <Button variant="ghost" size="icon"><Pencil className="h-4 w-4" /></Button>
+                    </ItemDialog>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(cat.key, item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
                 </div>
               ))}
             </ScrollArea>
-            <Dialog>
-              <DialogTrigger asChild><Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add {cat.title.slice(0, -1)}</Button></DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Add New {cat.title.slice(0, -1)}</DialogTitle></DialogHeader>
-                <form onSubmit={(e) => { 
-                    e.preventDefault(); 
-                    const itemData = getTypedItem(new FormData(e.currentTarget), cat.key);
-                    if (itemData) handleAddItem(cat.key, itemData as any);
-                    e.currentTarget.reset();
-                    (document.getElementById(`close-dialog-${cat.key}`) as HTMLElement).click(); 
-                }}>
-                  <div className="grid gap-4 py-4">
-                    {cat.fields.map(field => (
-                      <React.Fragment key={field.name}>
-                        <Label htmlFor={`${field.name}-${cat.key}`}>{field.label}</Label>
-                        <Input id={`${field.name}-${cat.key}`} name={field.name} type={field.type} required={field.name === 'name'} defaultValue={field.type === 'color' ? '#3F51B5' : ''}/>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <DialogFooter>
-                    <DialogClose asChild><Button id={`close-dialog-${cat.key}`} type="button" variant="secondary">Cancel</Button></DialogClose>
-                    <Button type="submit">Save</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <ItemDialog
+              category={cat}
+              onSave={(newItem) => handleAddItem(cat.key, newItem)}
+              getTypedItem={getTypedItem}
+            >
+              <Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add {cat.title.slice(0, -1)}</Button>
+            </ItemDialog>
           </CardContent>
         </Card>
       ))}

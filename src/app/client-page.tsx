@@ -23,6 +23,7 @@ export type TrackerViewType = '24h' | 'day' | 'night';
 function AppHeader({ activeView }: { activeView: View }) {
   const { today, setToday } = React.useContext(AppContext)!;
   const { trackerVewType, setTrackerViewType } = React.useContext(AppContext)!;
+  const { loading, error } = useFirestoreData();
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
@@ -30,11 +31,22 @@ function AppHeader({ activeView }: { activeView: View }) {
     }
   };
 
+  const ConnectionStatus = () => {
+    if (loading) {
+      return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span>Connecting...</span></div>;
+    }
+    if (error) {
+      return <div className="flex items-center gap-2 text-sm text-destructive"><Users className="h-4 w-4" /><span>Connection Failed</span></div>;
+    }
+    return <div className="flex items-center gap-2 text-sm text-green-500"><Users className="h-4 w-4" /><span>Connected</span></div>;
+  };
+
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="md:hidden" />
         <h1 className="text-xl font-semibold">EquipTrack AI</h1>
+        <ConnectionStatus />
       </div>
       <div className="flex items-center gap-2">
         {activeView === 'tracker' || activeView === 'meeting' ? (
@@ -85,6 +97,7 @@ export default function ClientPage() {
     data, 
     setData, 
     loading,
+    error,
     addBooking,
     updateBooking,
     deleteBooking,

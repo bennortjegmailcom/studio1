@@ -13,6 +13,7 @@ const DATA_DOC_ID = 'appData'; // Using a single document for simplicity
 export default function useFirestoreData() {
   const [data, setData] = useState<AppData>(initialData);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -22,14 +23,19 @@ export default function useFirestoreData() {
         (docSnap) => {
             if (docSnap.exists()) {
                 setData(docSnap.data() as AppData);
+                setError(null);
             } else {
                 // Document doesn't exist, so initialize it
                 console.log('No such document! Initializing with default data.');
                 setDoc(docRef, initialData)
-                    .then(() => setData(initialData))
+                    .then(() => {
+                        setData(initialData);
+                        setError(null);
+                    })
                     .catch(error => {
                         console.error("Error initializing document:", error);
                         toast({ variant: 'destructive', title: 'Database Error', description: 'Could not initialize data.' });
+                        setError(error);
                     });
             }
             setLoading(false);
@@ -37,6 +43,7 @@ export default function useFirestoreData() {
         (error) => {
             console.error("Error listening to document:", error);
             toast({ variant: 'destructive', title: 'Connection Error', description: 'Could not connect to the database.' });
+            setError(error);
             setLoading(false);
         }
     );
@@ -48,9 +55,11 @@ export default function useFirestoreData() {
     try {
         const docRef = doc(db, 'data', DATA_DOC_ID);
         await setDoc(docRef, updatedData);
+        setError(null);
     } catch (error) {
         console.error("Error updating document:", error);
         toast({ variant: 'destructive', title: 'Sync Error', description: 'Could not save changes to the database.' });
+        setError(error as Error);
     }
   }, [toast]);
 
@@ -122,5 +131,5 @@ export default function useFirestoreData() {
   }, [toast]);
 
 
-  return { data, setData: updateRemoteState, loading, addBooking, updateBooking, deleteBooking, clearBookingsForDay };
+  return { data, setData: updateRemoteState, loading, error, addBooking, updateBooking, deleteBooking, clearBookingsForDay };
 }
