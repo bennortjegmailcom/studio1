@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { AppData, Equipment, System, Fault, Responsibility, Relations, Area } from '@/lib/types';
 import { PlusCircle, Trash2, Download, Upload, Save, Eye, Pencil } from 'lucide-react';
@@ -76,6 +77,53 @@ function ItemDialog({ item, category, onSave, children, getTypedItem }: { item?:
 }
 
 
+function BulkItemDialog({ category, onBulkAdd, getTypedItem }: { category: any, onBulkAdd: (items: any[]) => void, getTypedItem: (formData: FormData, catKey: keyof AppData) => any }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [text, setText] = useState('');
+
+    const handleSubmit = () => {
+        const names = text.split('\n').map(name => name.trim()).filter(name => name.length > 0);
+        const newItems = names.map(name => {
+            const formData = new FormData();
+            formData.append('name', name);
+            return getTypedItem(formData, category.key);
+        }).filter(item => item !== null);
+
+        if (newItems.length > 0) {
+            onBulkAdd(newItems);
+        }
+        setIsOpen(false);
+        setText('');
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4" /> Bulk Add</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Bulk Add {category.title}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <Label htmlFor="bulk-add-textarea">Enter one item name per line.</Label>
+                    <Textarea
+                        id="bulk-add-textarea"
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Area 1&#x0a;Area 2&#x0a;Area 3"
+                        className="h-48"
+                    />
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="secondary" onClick={() => setIsOpen(false)}>Cancel</Button>
+                    <Button type="button" onClick={handleSubmit}>Save</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function DataManagementTab() {
   const { data, setData } = useContext(AppContext)!;
 
@@ -84,6 +132,15 @@ function DataManagementTab() {
     const items = data[type] as T[] || [];
     const fullItem = { ...newItem, id: `${type.toString().slice(0, 4)}-${Date.now()}` } as T;
     setData({...data, [type]: [...items, fullItem]});
+  };
+
+  const handleBulkAddItems = <T extends { id: string, name: string }>(type: keyof AppData, newItems: Omit<T, 'id'>[]) => {
+    const items = data[type] as T[] || [];
+    const fullItems = newItems.map((newItem, index) => ({
+        ...newItem,
+        id: `${type.toString().slice(0, 4)}-${Date.now()}-${index}`
+    })) as T[];
+    setData({...data, [type]: [...items, ...fullItems]});
   };
 
   const handleDeleteItem = (type: keyof AppData, id: string) => {
@@ -155,13 +212,20 @@ function DataManagementTab() {
                 </div>
               ))}
             </ScrollArea>
-            <ItemDialog
-              category={cat}
-              onSave={(newItem) => handleAddItem(cat.key, newItem)}
-              getTypedItem={getTypedItem}
-            >
-              <Button variant="outline" className="w-full mt-2"><PlusCircle className="mr-2 h-4 w-4"/> Add {cat.title.slice(0, -1)}</Button>
-            </ItemDialog>
+            <div className="flex gap-2 mt-2">
+              <ItemDialog
+                category={cat}
+                onSave={(newItem) => handleAddItem(cat.key, newItem)}
+                getTypedItem={getTypedItem}
+              >
+                <Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4"/> Add</Button>
+              </ItemDialog>
+              <BulkItemDialog
+                category={cat}
+                onBulkAdd={(newItems) => handleBulkAddItems(cat.key, newItems)}
+                getTypedItem={getTypedItem}
+              />
+            </div>
           </CardContent>
         </Card>
       ))}
