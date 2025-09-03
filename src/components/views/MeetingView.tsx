@@ -3,8 +3,7 @@
 import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import BookingModal from '@/components/BookingModal';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import type { Booking, Selection, Area } from '@/lib/types';
 import {
   AlertDialog,
@@ -53,7 +52,7 @@ function MeetingViewContent() {
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
-  const { data, today, deleteBooking, trackerVewType, clearBookingsForDay } = context;
+  const { data, today, trackerVewType, clearBookingsForDay } = context;
 
   const currentView = viewConfig[trackerVewType];
   const totalMinutes = currentView.end - currentView.start;
