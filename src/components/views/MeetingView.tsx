@@ -44,15 +44,8 @@ const viewConfig = {
 function MeetingViewContent() {
   const context = useContext(AppContext)!;
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selection, setSelection] = useState<Selection | null>(null);
-  const [selectionBox, setSelectionBox] = useState<React.CSSProperties>({});
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-
   const [hoverTooltip, setHoverTooltip] = useState<{ visible: boolean; x: number; time: string }>({ visible: false, x: 0, time: '' });
-
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-
   const { data, today, trackerVewType, clearBookingsForDay } = context;
 
   const currentView = viewConfig[trackerVewType];
@@ -108,50 +101,6 @@ function MeetingViewContent() {
     };
   }
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('[data-booking-id]')) {
-      return;
-    }
-    if (e.button !== 0 || !timelineRef.current) return;
-    const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    setIsSelecting(true);
-    setStartPos({ x, y });
-
-    const area = findAreaByY(y);
-    if (!area) return;
-
-    const colIndex = Math.floor(x / columnWidth);
-
-    const startTime = currentView.start + (colIndex * TIME_INCREMENT);
-
-    const rowIndex = findRowIndexByY(y);
-    const topPos = rowIndex * 50;
-
-    setSelection({ areaId: area.id, startTime: startTime % (24*60), endTime: (startTime + TIME_INCREMENT) % (24*60) });
-    setSelectionBox({
-      position: 'absolute',
-      left: colIndex * columnWidth,
-      top: topPos,
-      width: columnWidth,
-      height: 50,
-      backgroundColor: 'hsla(var(--primary), 0.3)',
-      border: '1px solid hsl(var(--primary))',
-      pointerEvents: 'none'
-    });
-  };
-
-  const findAreaByY = (y: number) => {
-    const rowIndex = Math.floor(y / 50);
-    return data.areas[rowIndex];
-  };
-
-  const findRowIndexByY = (y: number) => {
-    return Math.floor(y/50);
-  };
-
   const getBookingAreaRow = (booking: Booking) => {
     const area = data.areas.find(a => data.relations.areaToEquipment?.[a.id]?.includes(booking.equipmentId));
     if (!area) return -1;
@@ -176,41 +125,9 @@ function MeetingViewContent() {
     } else {
         setHoverTooltip(prev => ({...prev, visible: false}));
     }
-
-
-    // Selection Logic
-    if (!isSelecting || !selection) return;
-
-    const startCol = Math.floor(startPos.x / columnWidth);
-    const currentCol = Math.max(0, colIndex);
-
-    const left = Math.min(startCol, currentCol) * columnWidth;
-    const width = (Math.abs(startCol - currentCol) + 1) * columnWidth;
-
-    setSelectionBox(prev => ({ ...prev, left, width }));
-
-    const minCol = Math.min(startCol, currentCol);
-    const maxCol = Math.max(startCol, currentCol);
-
-    const newStartTime = currentView.start + minCol * TIME_INCREMENT;
-    const newEndTime = currentView.start + (maxCol + 1) * TIME_INCREMENT;
-
-    setSelection(prev => prev ? { ...prev, startTime: newStartTime % (24*60), endTime: newEndTime % (24*60) } : null);
-  };
-
-  const handleMouseUp = () => {
-    if (isSelecting && selection && selection.endTime !== selection.startTime) {
-      // In TrackerView this opens the modal. Here we do nothing, selection is cleared on mouse up.
-    }
-    setIsSelecting(false);
-    setSelectionBox({});
   };
 
   const handleMouseLeave = () => {
-    if (isSelecting) {
-        setIsSelecting(false);
-        setSelectionBox({});
-    }
      setHoverTooltip(prev => ({...prev, visible: false}));
   }
 
@@ -334,18 +251,6 @@ function MeetingViewContent() {
           <CardTitle>Meeting Timeline</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow overflow-x-auto pt-8 relative">
-
-            {/* Selection Info Box */}
-            {isSelecting && selection && (
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 bg-card p-2 rounded-md shadow-lg border text-sm font-mono whitespace-nowrap">
-                  <span className="text-primary font-semibold">Selection:</span>
-                  <span className="ml-2">{formatTime(selection.startTime)}</span>
-                  <span className="mx-2">-</span>
-                  <span>{formatTime(selection.endTime)}</span>
-                  <span className="ml-4 font-sans text-muted-foreground">({formatDuration(selection.endTime - selection.startTime)})</span>
-              </div>
-            )}
-
             <div className="grid min-h-full" style={{ gridTemplateColumns: '150px 1fr' }}>
               {/* Header: Area Names */}
               <div className="sticky left-0 z-20 font-semibold bg-card border-r border-b">Area</div>
@@ -364,15 +269,13 @@ function MeetingViewContent() {
               </div>
               <div
                 ref={timelineRef}
-                className="relative cursor-crosshair"
-                onMouseDown={handleMouseDown}
+                className="relative"
                 onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
                 style={{height: `${totalEquipmentSlots * 50}px`}}
               >
                 {/* Hover Tooltip */}
-                {hoverTooltip.visible && !isSelecting && (
+                {hoverTooltip.visible && (
                   <div
                       className="absolute top-0 z-30 flex flex-col items-center pointer-events-none"
                       style={{ transform: `translateX(${hoverTooltip.x}px)`, height: '100%'}}
@@ -391,8 +294,6 @@ function MeetingViewContent() {
                           ))}
                       </div>
                   ))}
-
-                {isSelecting && selectionBox && <div style={selectionBox}></div>}
 
                 {/* Render Bookings */}
                 {bookingsForView.map((booking) => {
