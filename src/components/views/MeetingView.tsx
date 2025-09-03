@@ -3,6 +3,7 @@
 import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import type { Booking, Selection, Area } from '@/lib/types';
 import {
